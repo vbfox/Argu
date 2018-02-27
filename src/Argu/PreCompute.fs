@@ -555,10 +555,11 @@ and private preComputeUnionArgInfoInner (stack : Type list) (helpParam : HelpPar
     current := result // assign result to children
     result
 
-and preComputeUnionArgInfo<'Template when 'Template :> IArgParserTemplate> (doPostProcess: bool) =
-    let result = preComputeUnionArgInfoInner [] None (fun () -> None) typeof<'Template>
+and preComputeUnionArgInfo<'Template when 'Template :> IArgParserTemplate> () =
+    preComputeUnionArgInfoInner [] None (fun () -> None) typeof<'Template>
 
-    // used for performing additional checks on the completed dependency graph
+// used for performing additional checks on the completed dependency graph
+let checkUnionArgInfo (result: UnionArgInfo) =
     let rec postProcess (argInfo : UnionArgInfo) =
         // check for conflicting CLI identifiers
         argInfo.Cases.Value
@@ -592,7 +593,5 @@ and preComputeUnionArgInfo<'Template when 'Template :> IArgParserTemplate> (doPo
             | SubCommand(_, aI, _) -> postProcess aI
             | _ -> ()
 
-    if doPostProcess then
-        postProcess result
-
+    postProcess result
     result

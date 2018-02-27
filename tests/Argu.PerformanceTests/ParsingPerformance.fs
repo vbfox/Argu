@@ -668,7 +668,11 @@ module PaketCommands =
                 | Version -> "show Paket version"
                 | From_Bootstrapper -> "call coming from the '--run' feature of the bootstrapper"
 
-    let commandParser = ArgumentParser.Create<Command>(programName = "paket", errorHandler = new ExceptionExiter())
+    let commandParser bypassDependencyGraphChecks =
+        ArgumentParser.Create<Command>(
+            programName = "paket",
+            errorHandler = new ExceptionExiter(),
+            bypassDependencyGraphChecks=bypassDependencyGraphChecks)
 
 open BenchmarkDotNet.Running
 open BenchmarkDotNet.Attributes
@@ -681,7 +685,7 @@ open BenchmarkDotNet.Environments
 type BenchConfig() as this =
     inherit ManualConfig()
 
-    let iterations = 50
+    let iterations = 5
 
     do
         this.Add(Job.Core.With(RunStrategy.ColdStart).WithLaunchCount(iterations).WithWarmupCount(0).WithTargetCount(1))
@@ -693,6 +697,10 @@ type PerfTest() =
     [<DefaultValue>]
     val mutable Args: string
 
+    [<Params(true, false)>]
+    [<DefaultValue>]
+    val mutable BypassDependencyGraphChecks: bool
+
     let mutable args = [||]
 
     [<GlobalSetup>]
@@ -700,5 +708,5 @@ type PerfTest() =
         args <- this.Args.Split(' ')
 
     [<Benchmark>]
-    member __.Parse() =
-        PaketCommands.commandParser.Parse(args)
+    member this.Parse() =
+        (PaketCommands.commandParser this.BypassDependencyGraphChecks).Parse(args)
