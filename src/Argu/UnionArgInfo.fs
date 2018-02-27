@@ -47,12 +47,12 @@ type HelpParam =
     }
 with
     member inline hp.IsHelpFlag(flag : string) =
-        let rec aux = function 
-            | [] -> false 
+        let rec aux = function
+            | [] -> false
             | h :: tl' -> if h = flag then true else aux tl'
 
         aux hp.Flags
-        
+
 /// Represents a parsing schema for a single parameter
 [<NoEquality; NoComparison>]
 type UnionCaseArgInfo =
@@ -123,7 +123,7 @@ with
     member inline __.IsCommandLineArg = match __.CommandLineNames with [] -> __.IsMainCommand | _ -> true
     member inline __.Type = __.ParameterInfo.Type
     member inline __.IsCustomAssignment = Option.isSome __.CustomAssignmentSeparator
-        
+
 
 and ParameterInfo =
     | Primitives of FieldParserInfo []
@@ -173,7 +173,26 @@ and [<NoEquality; NoComparison>]
 with
     member inline uai.UsesHelpParam = List.isEmpty uai.HelpParam.Flags |> not
     member inline uai.ContainsMainCommand = Option.isSome uai.MainCommandParam
+(*
+module BinaryUnionArgInfoSerializer =
+    open System.Text
 
+    type ISerializer<'t> =
+        abstract member Write: writer: BinaryWriter -> value: 't -> unit
+        abstract member Read: reader: BinaryReader -> 't
+
+    let stringSerializer = { new ISerializer<string> with
+                                 member __.Write w v = w.Write(v)
+                                 member __.Read r = r.ReadString() }
+
+    let intSerializer = { new ISerializer<int> with
+                              member __.Write w v = w.Write(v)
+                              member __.Read r = r.ReadInt32() }
+
+    let serialize (info: UnionArgInfo) =
+        use stream = new MemoryStream()
+        use writer = new BinaryWriter(stream, Encoding.UTF8)
+*)
 
 [<NoEquality; NoComparison>]
 type UnionCaseParseResult =
@@ -186,7 +205,7 @@ type UnionCaseParseResult =
         CaseInfo : UnionCaseArgInfo
         /// metadata provided by the parser
         ParseContext : string
-        /// parse source 
+        /// parse source
         Source : ParseSource
     }
 with
