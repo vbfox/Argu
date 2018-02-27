@@ -148,13 +148,13 @@ and [<NoEquality; NoComparison>]
         /// If subcommand, attempt to retrieve the parent record
         TryGetParent : unit -> UnionCaseArgInfo option
         /// Union cases
-        Cases : UnionCaseArgInfo []
+        Cases : Lazy<UnionCaseArgInfo []>
         /// Help flags specified by the library
         HelpParam : HelpParam
         /// Denotes that the current argument contains subcommands
-        ContainsSubcommands : bool
+        ContainsSubcommands : Lazy<bool>
         /// Specifies that CLI parse results require a subcommand
-        IsRequiredSubcommand : bool
+        IsRequiredSubcommand : Lazy<bool>
         /// Precomputed union tag reader
         TagReader : Lazy<obj -> int>
         /// Arguments inherited by parent commands
@@ -166,13 +166,13 @@ and [<NoEquality; NoComparison>]
         /// Union cases indexed by cli parameter names
         CliParamIndex : Lazy<PrefixDictionary<UnionCaseArgInfo>>
         /// Union case parameter used to gather unrecognized CLI params
-        UnrecognizedGatherParam : UnionCaseArgInfo option
+        UnrecognizedGatherParam : Lazy<UnionCaseArgInfo option>
         /// Main command parameter used by the CLI syntax
-        MainCommandParam : UnionCaseArgInfo option
+        MainCommandParam : Lazy<UnionCaseArgInfo option>
     }
 with
     member inline uai.UsesHelpParam = List.isEmpty uai.HelpParam.Flags |> not
-    member inline uai.ContainsMainCommand = Option.isSome uai.MainCommandParam
+    member inline uai.ContainsMainCommand = Option.isSome uai.MainCommandParam.Value
 (*
 module BinaryUnionArgInfoSerializer =
     open System.Text

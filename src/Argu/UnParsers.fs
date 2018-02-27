@@ -44,7 +44,7 @@ let mkCommandLineSyntax (argInfo : UnionArgInfo) (prefix : string) (maxWidth : i
         }
 
     let printedCases =
-        argInfo.Cases
+        argInfo.Cases.Value
         |> Seq.filter (fun aI -> not aI.IsHidden && not aI.IsMainCommand)
         |> Seq.filter (fun aI -> aI.Type <> ArgumentType.SubCommand)
         |> Seq.sortBy (fun aI -> aI.CliPosition)
@@ -52,7 +52,7 @@ let mkCommandLineSyntax (argInfo : UnionArgInfo) (prefix : string) (maxWidth : i
     match argInfo.HelpParam.Flags with
     | h :: _ -> yield! insertToken (sprintf " [%s]" h)
     | _ -> ()
-    
+
     for aI in printedCases do
         match aI.CommandLineNames with
         | [] -> ()
@@ -92,18 +92,18 @@ let mkCommandLineSyntax (argInfo : UnionArgInfo) (prefix : string) (maxWidth : i
         let formatCase = format() |> StringExpr.build
         yield! insertToken formatCase
 
-    if argInfo.ContainsSubcommands then
+    if argInfo.ContainsSubcommands.Value then
         let subCommandString =
             stringExpr {
                 yield ' '
-                if not argInfo.IsRequiredSubcommand then yield '['
+                if not argInfo.IsRequiredSubcommand.Value then yield '['
                 yield "<subcommand> [<options>]"
-                if not argInfo.IsRequiredSubcommand then yield ']'
+                if not argInfo.IsRequiredSubcommand.Value then yield ']'
             } |> StringExpr.build
 
         yield! insertToken subCommandString
 
-    match argInfo.MainCommandParam with
+    match argInfo.MainCommandParam.Value with
     | None -> ()
     | Some mc ->
         let formatMainCommand() = stringExpr {
@@ -126,7 +126,7 @@ let mkCommandLineSyntax (argInfo : UnionArgInfo) (prefix : string) (maxWidth : i
         let mainCommand = formatMainCommand() |> StringExpr.build
         yield! insertToken mainCommand
 }
- 
+
 /// <summary>
 ///     print usage string for given arg info
 /// </summary>
@@ -178,7 +178,7 @@ let mkArgUsage width (aI : UnionCaseArgInfo) = stringExpr {
         yield! StringExpr.whiteSpace descriptionOffset
     else
         yield! StringExpr.whiteSpace (descriptionOffset - finish + start)
-            
+
     let lines = wordwrap (max (width - descriptionOffset) 1) aI.Description
 
     match lines with
@@ -235,13 +235,13 @@ let mkUsageString (argInfo : UnionArgInfo) (programName : string) hideSyntax wid
         yield Environment.NewLine
 
     let options, subcommands =
-        argInfo.Cases
+        argInfo.Cases.Value
         |> Seq.filter (fun aI -> not aI.IsHidden)
         |> Seq.filter (fun aI -> not aI.IsMainCommand)
         |> Seq.partition (fun aI -> aI.Type <> ArgumentType.SubCommand)
 
-    match argInfo.MainCommandParam with
-    | Some aI when not aI.IsHidden -> 
+    match argInfo.MainCommandParam.Value with
+    | Some aI when not aI.IsHidden ->
         let! length = StringExpr.currentLength
         if length > 0 then yield Environment.NewLine
         assert(Option.isSome aI.MainCommandName)
@@ -260,14 +260,14 @@ let mkUsageString (argInfo : UnionArgInfo) (programName : string) hideSyntax wid
 
         match argInfo.HelpParam.Flags with
         | [] -> ()
-        | helpflag :: _ -> 
+        | helpflag :: _ ->
             yield Environment.NewLine
-            let wrappedList = 
+            let wrappedList =
                 sprintf "Use '%s <subcommand> %s' for additional information." programName helpflag
                 |> wordwrap (max (width - switchOffset) 1)
 
-            for line in wrappedList do 
-                yield String.mkWhiteSpace switchOffset 
+            for line in wrappedList do
+                yield String.mkWhiteSpace switchOffset
                 yield line
                 yield Environment.NewLine
 
@@ -284,7 +284,7 @@ let mkUsageString (argInfo : UnionArgInfo) (programName : string) hideSyntax wid
 }
 
 /// <summary>
-///     print a command line argument for a set of parameters   
+///     print a command line argument for a set of parameters
 /// </summary>
 let rec mkCommandLineArgs (argInfo : UnionArgInfo) (args : seq<obj>) =
     let mkEntry (aI : UnionCaseArgInfo) (t : obj) = seq {
@@ -295,7 +295,7 @@ let rec mkCommandLineArgs (argInfo : UnionArgInfo) (args : seq<obj>) =
         let clName() = List.head aI.CommandLineNames
 
         match aI.ParameterInfo with
-        | Primitives parsers ->  
+        | Primitives parsers ->
             let inline unpars i = parsers.[i].UnParser fields.[i]
             match aI.CustomAssignmentSeparator with
             | Some sep when parsers.Length = 1 ->
@@ -312,7 +312,7 @@ let rec mkCommandLineArgs (argInfo : UnionArgInfo) (args : seq<obj>) =
                     yield unpars i
 
         | OptionalParam(existential, parser) ->
-            let optional = 
+            let optional =
                 existential.Accept { new IFunc<obj option> with
                     member __.Invoke<'T> () = fields.[0] :?> 'T option |> Option.map box }
 
@@ -335,7 +335,7 @@ let rec mkCommandLineArgs (argInfo : UnionArgInfo) (args : seq<obj>) =
         }
 
     args
-    |> Seq.map (fun o -> let tag = argInfo.TagReader.Value o in argInfo.Cases.[tag], o)
+    |> Seq.map (fun o -> let tag = argInfo.TagReader.Value o in argInfo.Cases.Value.[tag], o)
     |> Seq.sortBy (fun (aI,_) -> aI.CliPosition)
     |> Seq.collect (fun (aI,o) -> mkEntry aI o)
 
@@ -345,13 +345,13 @@ let rec mkCommandLineArgs (argInfo : UnionArgInfo) (args : seq<obj>) =
 let mkAppSettingsDocument (argInfo : UnionArgInfo) printComments (args : 'Template list) =
     let mkArgumentEntry (t : 'Template) : XNode [] =
         let tag = argInfo.TagReader.Value (t :> _)
-        let aI = argInfo.Cases.[tag]
+        let aI = argInfo.Cases.Value.[tag]
         let getFields () = aI.FieldReader.Value (t :> _)
 
         let mkElem (mkComment : unit -> string) (key : string) (value : string) : XNode [] =
-            let xelem = 
-                XElement(XName.Get "add", 
-                    XAttribute(XName.Get "key", key), 
+            let xelem =
+                XElement(XName.Get "add",
+                    XAttribute(XName.Get "key", key),
                     XAttribute(XName.Get "value", value))
 
             if printComments then

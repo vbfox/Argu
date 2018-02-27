@@ -21,22 +21,22 @@ let mkUnionCase (info : UnionCaseArgInfo) index parseSource parsecontext (fields
 
 /// Create a ParseResults<_> instance from a set of template parameters
 let mkParseResultFromValues (info : UnionArgInfo) (exiter : IExiter) (width : int)
-                            (programName : string) (description : string option) 
+                            (programName : string) (description : string option)
                             (values : seq<'Template>) =
 
-    let agg = info.Cases |> Array.map (fun _ -> new ResizeArray<UnionCaseParseResult>())
+    let agg = info.Cases.Value |> Array.map (fun _ -> new ResizeArray<UnionCaseParseResult>())
     let mutable i = 0
     for value in values do
         let value = value :> obj
         let tag = info.TagReader.Value value
-        let case = info.Cases.[tag]
+        let case = info.Cases.Value.[tag]
         let fields = case.FieldReader.Value value
         let result = mkUnionCase case i ParseSource.None case.Name fields
         agg.[tag].Add result
         i <- i + 1
 
-    let results = 
-        { 
+    let results =
+        {
             IsUsageRequested = false
             UnrecognizedCliParams = []
             UnrecognizedCliParseResults = []
@@ -67,12 +67,12 @@ let postProcessResults (argInfo : UnionArgInfo) (ignoreMissingMandatory : bool)
             | _, ts' -> ts'
 
         match combined with
-        | [||] when caseInfo.IsMandatory && not ignoreMissingMandatory -> 
+        | [||] when caseInfo.IsMandatory && not ignoreMissingMandatory ->
             error argInfo ErrorCode.PostProcess "missing parameter '%s'." caseInfo.Name
         | _ -> combined
 
     {
-        Cases = argInfo.Cases |> Array.map combineSingle
+        Cases = argInfo.Cases.Value |> Array.map combineSingle
         UnrecognizedCliParams = match commandLineResults with Some clr -> clr.UnrecognizedCliParams | None -> []
         UnrecognizedCliParseResults = match commandLineResults with Some clr -> clr.UnrecognizedCliParseResults | None -> []
         IsUsageRequested = commandLineResults |> Option.exists (fun r -> r.IsUsageRequested)
