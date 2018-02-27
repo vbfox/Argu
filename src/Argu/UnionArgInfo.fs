@@ -58,7 +58,7 @@ with
 type UnionCaseArgInfo =
     {
         /// Human readable name identifier
-        Name : string
+        Name : Lazy<string>
         /// Contextual depth of current argument w.r.t subcommands
         Depth : int
         /// Numbers of parameters in the given union case
@@ -66,7 +66,7 @@ type UnionCaseArgInfo =
         /// UCI identifier
         UnionCaseInfo : UnionCaseInfo
         /// Field parser definitions or nested union argument
-        ParameterInfo : ParameterInfo
+        ParameterInfo : Lazy<ParameterInfo>
 
         /// Gets the parent record for union case
         GetParent : unit -> UnionArgInfo
@@ -79,9 +79,9 @@ type UnionCaseArgInfo =
         FieldReader : Lazy<obj -> obj[]>
 
         /// head element denotes primary command line arg
-        CommandLineNames : string list
+        CommandLineNames : Lazy<string list>
         /// name used in AppSettings
-        AppSettingsName : string option
+        AppSettingsName : Lazy<string option>
 
         /// Description of the parameter
         Description : string
@@ -92,37 +92,37 @@ type UnionCaseArgInfo =
         AppSettingsSplitOptions : StringSplitOptions
 
         /// Separator token used for EqualsAssignment syntax; e.g. '=' forces '--param=arg' syntax
-        CustomAssignmentSeparator : string option
+        CustomAssignmentSeparator : Lazy<string option>
         /// Reads assignment for that specific value
         AssignmentParser : Lazy<string -> Assignment>
 
         /// Mandated Cli position for the argument
-        CliPosition : CliPosition
+        CliPosition : Lazy<CliPosition>
         /// Specifies that this argument is the main CLI command
-        MainCommandName : string option
+        MainCommandName : Lazy<string option>
         /// If specified, should consume remaining tokens from the CLI
-        IsRest : bool
+        IsRest : Lazy<bool>
         /// If specified, multiple parameters can be added in Configuration in CSV form.
-        AppSettingsCSV : bool
+        AppSettingsCSV : Lazy<bool>
         /// Fails if no argument of this type is specified
-        IsMandatory : bool
+        IsMandatory : Lazy<bool>
         /// Indicates that argument should be inherited in the scope of any sibling subcommands.
-        IsInherited : bool
+        IsInherited : Lazy<bool>
         /// Specifies that argument should be specified at most once in CLI
-        IsUnique : bool
+        IsUnique : Lazy<bool>
         /// Hide from Usage
-        IsHidden : bool
+        IsHidden : Lazy<bool>
         /// Declares that the parameter should gather any unrecognized CLI params
-        IsGatherUnrecognized : bool
+        IsGatherUnrecognized : Lazy<bool>
         /// Combine AppSettings with CLI inputs
-        GatherAllSources : bool
+        GatherAllSources : Lazy<bool>
     }
 with
     member inline __.Tag = __.UnionCaseInfo.Tag
-    member inline __.IsMainCommand = Option.isSome __.MainCommandName
-    member inline __.IsCommandLineArg = match __.CommandLineNames with [] -> __.IsMainCommand | _ -> true
-    member inline __.Type = __.ParameterInfo.Type
-    member inline __.IsCustomAssignment = Option.isSome __.CustomAssignmentSeparator
+    member inline __.IsMainCommand = Option.isSome __.MainCommandName.Value
+    member inline __.IsCommandLineArg = match __.CommandLineNames.Value with [] -> __.IsMainCommand | _ -> true
+    member inline __.Type = __.ParameterInfo.Value.Type
+    member inline __.IsCustomAssignment = Option.isSome __.CustomAssignmentSeparator.Value
 
 
 and ParameterInfo =
@@ -189,9 +189,26 @@ module BinaryUnionArgInfoSerializer =
                               member __.Write w v = w.Write(v)
                               member __.Read r = r.ReadInt32() }
 
+    let private serializeHelpParam (writer: BinaryWriter) (helpParam: HelpParam) =
+        ()
+
+    let private serializeCase (writer: BinaryWriter) (case: UnionCaseArgInfo) =
+        ()
+
     let serialize (info: UnionArgInfo) =
         use stream = new MemoryStream()
         use writer = new BinaryWriter(stream, Encoding.UTF8)
+
+        writer.Write(info.Type.FullName)
+        writer.Write(info.Depth)
+        writer.Write(info.Cases.Value.Length)
+        for case in info.Cases.Value do
+            serializeCase writer case
+        serializeHelpParam writer info.HelpParam
+        writer.Write(info.ContainsSubcommands.Value)
+        writer.Write(info.IsRequiredSubcommand.Value)
+        for case in info.InheritedParams.Value do
+            serializeCase writer case
 *)
 
 [<NoEquality; NoComparison>]
@@ -227,8 +244,8 @@ type UnionParseResults =
     }
 
 type UnionCaseArgInfo with
-    member inline ucai.IsFirst = ucai.CliPosition = CliPosition.First
-    member inline ucai.IsLast = ucai.CliPosition = CliPosition.Last
+    member inline ucai.IsFirst = ucai.CliPosition.Value = CliPosition.First
+    member inline ucai.IsLast = ucai.CliPosition.Value = CliPosition.Last
 
     member ucai.ToArgumentCaseInfo() : ArgumentCaseInfo =
         {

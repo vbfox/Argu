@@ -93,7 +93,7 @@ type CliParseResultAggregator internal (argInfo : UnionArgInfo, stack : CliParse
             error argInfo ErrorCode.CommandLine "argument '%s' should precede all other arguments." result.ParseContext
 
         match lastResult with
-        | Some lr when not (lr.Tag = result.CaseInfo.Tag && lr.CaseInfo.IsRest) ->
+        | Some lr when not (lr.Tag = result.CaseInfo.Tag && lr.CaseInfo.IsRest.Value) ->
             error argInfo ErrorCode.CommandLine "parameter '%s' should appear after all other arguments." lr.ParseContext
         | _ -> ()
 
@@ -102,8 +102,8 @@ type CliParseResultAggregator internal (argInfo : UnionArgInfo, stack : CliParse
 
         resultCount <- resultCount + 1
         let agg = results.[result.Tag]
-        if result.CaseInfo.IsUnique && agg.Count > 0 then
-            error argInfo ErrorCode.CommandLine "argument '%s' has been specified more than once." result.CaseInfo.Name
+        if result.CaseInfo.IsUnique.Value && agg.Count > 0 then
+            error argInfo ErrorCode.CommandLine "argument '%s' has been specified more than once." result.CaseInfo.Name.Value
 
         if result.CaseInfo.Type = ArgumentType.SubCommand then
             isSubCommandDefined <- true
@@ -171,8 +171,8 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
     | HelpArgument _ -> aggregator.IsUsageRequested <- true
     | UnrecognizedOrArgument token ->
         match argInfo.MainCommandParam.Value with
-        | Some mcp when not (mcp.IsUnique && aggregator.IsMainCommandDefined) ->
-            match mcp.ParameterInfo with
+        | Some mcp when not (mcp.IsUnique.Value && aggregator.IsMainCommandDefined) ->
+            match mcp.ParameterInfo.Value with
             | Primitives parsers ->
                 // since main command syntax deals with a degree of implicitness
                 // we need a way to backtrack in case of a parse error.
@@ -221,7 +221,7 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
 
                     do aux 0
                     if fields.Count = parsers.Length then
-                        aggregator.AppendResult mcp mcp.Name (fields.ToArray())
+                        aggregator.AppendResult mcp mcp.Name.Value (fields.ToArray())
                         true
                     else
                         match argInfo.UnrecognizedGatherParam.Value with
@@ -231,7 +231,7 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
 
                         false
 
-                if parseSingleParameter true && mcp.IsRest then
+                if parseSingleParameter true && mcp.IsRest.Value then
                     while not state.Reader.IsCompleted && parseSingleParameter false do ()
 
             | ListParam(existential, field) ->
@@ -261,7 +261,7 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
                         do gather true
                         match Seq.toList args with
                         | [] -> () ; false
-                        | list -> aggregator.AppendResult mcp mcp.Name [| list |] ; true }
+                        | list -> aggregator.AppendResult mcp mcp.Name.Value [| list |] ; true }
 
             | paramInfo -> arguExn "internal error. MainCommand has param representation %A" paramInfo
 
@@ -275,7 +275,7 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
     | GroupedParams(_, switches) ->
         for sw in switches do
             let caseInfo = argInfo.CliParamIndex.Value.[sw]
-            match caseInfo.ParameterInfo with
+            match caseInfo.ParameterInfo.Value with
             | Primitives [||] -> aggregator.AppendResult caseInfo sw [||]
             | OptionalParam _ -> aggregator.AppendResult caseInfo sw [|None|]
             | _ -> error argInfo ErrorCode.CommandLine "argument '%s' cannot be grouped with other switches." sw
@@ -284,7 +284,7 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
         error argInfo ErrorCode.CommandLine "invalid CLI syntax '%s%s<param>'." name sep
 
     | CliParam(token, name, caseInfo, assignment) ->
-        match caseInfo.ParameterInfo with
+        match caseInfo.ParameterInfo.Value with
         | Primitives [|field|] when caseInfo.IsCustomAssignment ->
             match assignment with
             | NoAssignment -> error argInfo ErrorCode.CommandLine "argument '%s' missing an assignment." name
@@ -313,14 +313,14 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
 
                 | NoAssignment ->
                     error argInfo ErrorCode.CommandLine "argument '%s' must be followed by assignment '%s%s%s'."
-                        caseInfo.Name kf.Description caseInfo.CustomAssignmentSeparator.Value vf.Description
+                        caseInfo.Name.Value kf.Description caseInfo.CustomAssignmentSeparator.Value.Value vf.Description
 
             | CliParam(token,name,_,Assignment _) ->
                 error argInfo ErrorCode.CommandLine "argument '%s' was given invalid key name '%s' in '%s'."
                     state.Reader.CurrentSegment name token
             | _ ->
                 error argInfo ErrorCode.CommandLine "argument '%s' must be followed by assignment '%s%s%s'."
-                    caseInfo.Name kf.Description caseInfo.CustomAssignmentSeparator.Value vf.Description
+                    caseInfo.Name.Value kf.Description caseInfo.CustomAssignmentSeparator.Value.Value vf.Description
 
         | Primitives fields ->
             let parseNextField (p : FieldParserInfo) =
@@ -343,7 +343,7 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
                 aggregator.AppendResult caseInfo name fields
 
             parseSingleParameter ()
-            if caseInfo.IsRest then
+            if caseInfo.IsRest.Value then
                 while not state.Reader.IsCompleted do
                     parseSingleParameter ()
 

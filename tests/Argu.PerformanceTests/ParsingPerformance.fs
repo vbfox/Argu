@@ -688,7 +688,7 @@ type BenchConfig() as this =
     let iterations = 5
 
     do
-        this.Add(Job.Core.With(RunStrategy.ColdStart).WithLaunchCount(iterations).WithWarmupCount(0).WithTargetCount(1))
+        //this.Add(Job.Core.With(RunStrategy.ColdStart).WithLaunchCount(iterations).WithWarmupCount(0).WithTargetCount(1))
         this.Add(Job.Clr.With(RunStrategy.ColdStart).WithLaunchCount(iterations).WithWarmupCount(0).WithTargetCount(1))
 
 [<Config(typeof<BenchConfig>)>]
@@ -701,6 +701,10 @@ type PerfTest() =
     [<DefaultValue>]
     val mutable BypassDependencyGraphChecks: bool
 
+    [<Params(true, false)>]
+    [<DefaultValue>]
+    val mutable CmdLineOnly: bool
+
     let mutable args = [||]
 
     [<GlobalSetup>]
@@ -709,4 +713,8 @@ type PerfTest() =
 
     [<Benchmark>]
     member this.Parse() =
-        (PaketCommands.commandParser this.BypassDependencyGraphChecks).Parse(args)
+        let parser = PaketCommands.commandParser this.BypassDependencyGraphChecks
+        if this.CmdLineOnly then
+            parser.ParseCommandLine(args)
+        else
+            parser.Parse(args)

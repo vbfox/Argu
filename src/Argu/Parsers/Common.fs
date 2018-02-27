@@ -31,7 +31,7 @@ let mkParseResultFromValues (info : UnionArgInfo) (exiter : IExiter) (width : in
         let tag = info.TagReader.Value value
         let case = info.Cases.Value.[tag]
         let fields = case.FieldReader.Value value
-        let result = mkUnionCase case i ParseSource.None case.Name fields
+        let result = mkUnionCase case i ParseSource.None case.Name.Value fields
         agg.[tag].Add result
         i <- i + 1
 
@@ -62,13 +62,13 @@ let postProcessResults (argInfo : UnionArgInfo) (ignoreMissingMandatory : bool)
             match acr, clr with
             | Choice1Of2 ts, [||] -> ts
             | Choice2Of2 e, [||] -> raise e
-            | Choice2Of2 e, _ when caseInfo.GatherAllSources -> raise e
-            | Choice1Of2 ts, ts' when caseInfo.GatherAllSources -> Array.append ts ts'
+            | Choice2Of2 e, _ when caseInfo.GatherAllSources.Value -> raise e
+            | Choice1Of2 ts, ts' when caseInfo.GatherAllSources.Value -> Array.append ts ts'
             | _, ts' -> ts'
 
         match combined with
-        | [||] when caseInfo.IsMandatory && not ignoreMissingMandatory ->
-            error argInfo ErrorCode.PostProcess "missing parameter '%s'." caseInfo.Name
+        | [||] when caseInfo.IsMandatory.Value && not ignoreMissingMandatory ->
+            error argInfo ErrorCode.PostProcess "missing parameter '%s'." caseInfo.Name.Value
         | _ -> combined
 
     {

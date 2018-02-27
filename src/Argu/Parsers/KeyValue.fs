@@ -31,12 +31,12 @@ let private parseKeyValuePartial (state : KeyValueParseState) (caseInfo : UnionC
     let inline success ts = state.Results.AddResults caseInfo ts
 
     try
-        match caseInfo.AppSettingsName with
+        match caseInfo.AppSettingsName.Value with
         | Some name ->
             match (try state.Reader.GetValue name with _ -> null) with
             | null | "" -> ()
             | entry ->
-                match caseInfo.ParameterInfo with
+                match caseInfo.ParameterInfo.Value with
                 | Primitives [||] ->
                     let ok, flag = Boolean.TryParse entry
                     if ok then
@@ -48,7 +48,7 @@ let private parseKeyValuePartial (state : KeyValueParseState) (caseInfo : UnionC
 
                 | Primitives fields ->
                     let tokens =
-                        if caseInfo.AppSettingsCSV || fields.Length > 1 then
+                        if caseInfo.AppSettingsCSV.Value || fields.Length > 1 then
                             entry.Split(caseInfo.AppSettingsSeparators, caseInfo.AppSettingsSplitOptions)
                         else [| entry |]
 
@@ -69,7 +69,7 @@ let private parseKeyValuePartial (state : KeyValueParseState) (caseInfo : UnionC
                         mkUnionCase caseInfo caseInfo.Tag ParseSource.AppSettings name fields
 
                     let results =
-                        if caseInfo.AppSettingsCSV then [| while !pos < tokens.Length do yield parseSingleArgument () |]
+                        if caseInfo.AppSettingsCSV.Value then [| while !pos < tokens.Length do yield parseSingleArgument () |]
                         else [| parseSingleArgument () |]
 
                     success results
