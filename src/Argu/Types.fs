@@ -115,7 +115,7 @@ type ArgumentCaseInfo =
         AppSettingsName : Lazy<string option>
 
         /// Description of the parameter
-        Description : string
+        Description : Lazy<string>
 
         /// AppSettings parameter separator
         AppSettingsSeparators : string list

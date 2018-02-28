@@ -209,11 +209,12 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
     let fields = uci.GetFields()
     let types = fields |> Array.map (fun f -> f.PropertyType)
 
-    let caseCtor = FSharpValue.PreComputeUnionConstructor(uci, allBindings)
+    let caseCtor = lazy(FSharpValue.PreComputeUnionConstructor(uci, allBindings))
 
     // create a dummy instance for given union case
-    let dummyFields = types |> Array.map Unchecked.UntypedDefaultOf
-    let dummy = caseCtor dummyFields :?> IArgParserTemplate
+    let dummy = lazy(
+        let dummyFields = types |> Array.map Unchecked.UntypedDefaultOf
+        caseCtor.Value dummyFields :?> IArgParserTemplate)
 
     // use ref cell for late binding of parent argInfo
     let current = ref None
@@ -401,9 +402,9 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
         arguExn "CSV attribute is only compatible with branches of unary fields."
 
     // extract the description string for given union case
-    let description =
-        try dummy.Usage
-        with _ -> arguExn "Error generating usage string from IArgParserTemplate for case %O." uci
+    let description = lazy(
+        try dummy.Value.Usage
+        with _ -> arguExn "Error generating usage string from IArgParserTemplate for case %O." uci)
 
     let uai = {
         UnionCaseInfo = uci
@@ -604,6 +605,8 @@ let checkUnionArgInfo (result: UnionArgInfo) =
             case.CustomAssignmentSeparator.Value |> ignore
             case.IsGatherUnrecognized.Value |> ignore
             case.IsHidden.Value |> ignore
+            case.CaseCtor.Value |> ignore
+            case.Description.Value |> ignore
 
         // iterate through the child nodes
         for case in argInfo.Cases.Value do

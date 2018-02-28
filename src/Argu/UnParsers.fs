@@ -179,7 +179,7 @@ let mkArgUsage width (aI : UnionCaseArgInfo) = stringExpr {
     else
         yield! StringExpr.whiteSpace (descriptionOffset - finish + start)
 
-    let lines = wordwrap (max (width - descriptionOffset) 1) aI.Description
+    let lines = wordwrap (max (width - descriptionOffset) 1) aI.Description.Value
 
     match lines with
     | [] -> ()
@@ -376,7 +376,7 @@ let mkAppSettingsDocument (argInfo : UnionArgInfo) printComments (args : 'Templa
                 let mkComment () =
                     stringExpr {
                         yield ' '
-                        yield aI.Description.[0]
+                        yield aI.Description.Value.[0]
 
                         match parsers |> Array.toList with
                         | [] -> ()
@@ -401,7 +401,7 @@ let mkAppSettingsDocument (argInfo : UnionArgInfo) printComments (args : 'Templa
                             |> Seq.map (fun t -> fp.UnParser (t :> _))
                             |> String.concat aI.AppSettingsSeparators.[0]
 
-                        let mkComment () = sprintf " %s : %s ..." aI.Description fp.Description
+                        let mkComment () = sprintf " %s : %s ..." aI.Description.Value fp.Description
 
                         mkElem mkComment key values }
 
@@ -413,7 +413,7 @@ let mkAppSettingsDocument (argInfo : UnionArgInfo) printComments (args : 'Templa
                             | None -> ""
                             | Some t -> fp.UnParser (t :> _)
 
-                        let mkComment () = sprintf " %s : ?%s" aI.Description fp.Description
+                        let mkComment () = sprintf " %s : ?%s" aI.Description.Value fp.Description
 
                         mkElem mkComment key value }
 

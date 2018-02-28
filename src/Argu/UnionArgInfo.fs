@@ -72,7 +72,7 @@ type UnionCaseArgInfo =
         GetParent : unit -> UnionArgInfo
 
         /// Builds a union case out of its field parameters
-        CaseCtor : obj [] -> obj
+        CaseCtor : Lazy<obj [] -> obj>
         /// Composes case fields into a parametric tuple, if not nullary
         FieldCtor : Lazy<obj [] -> obj>
         /// Decomposes a case instance into an array of fields
@@ -84,7 +84,7 @@ type UnionCaseArgInfo =
         AppSettingsName : Lazy<string option>
 
         /// Description of the parameter
-        Description : string
+        Description : Lazy<string>
 
         /// Configuration parsing parameter separator
         AppSettingsSeparators : string []
@@ -227,7 +227,7 @@ type UnionCaseParseResult =
     }
 with
     member inline __.Tag = __.CaseInfo.Tag
-    member inline __.Value = __.CaseInfo.CaseCtor __.Fields
+    member inline __.Value = __.CaseInfo.CaseCtor.Value __.Fields
     member inline __.FieldContents = __.CaseInfo.FieldCtor.Value __.Fields
 
 [<NoEquality; NoComparison>]
