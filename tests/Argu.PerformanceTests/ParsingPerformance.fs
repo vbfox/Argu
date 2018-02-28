@@ -685,7 +685,7 @@ open BenchmarkDotNet.Environments
 type BenchConfig() as this =
     inherit ManualConfig()
 
-    let iterations = 5
+    let iterations = 50
 
     do
         //this.Add(Job.Core.With(RunStrategy.ColdStart).WithLaunchCount(iterations).WithWarmupCount(0).WithTargetCount(1))

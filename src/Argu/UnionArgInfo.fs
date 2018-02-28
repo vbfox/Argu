@@ -9,6 +9,7 @@ open System.Reflection
 open FSharp.Reflection
 open FSharp.Quotations
 open FSharp.Quotations.Patterns
+open System.IO.Compression
 
 type IParseResult =
     abstract GetAllResults : unit -> seq<obj>
@@ -173,43 +174,130 @@ and [<NoEquality; NoComparison>]
 with
     member inline uai.UsesHelpParam = List.isEmpty uai.HelpParam.Flags |> not
     member inline uai.ContainsMainCommand = Option.isSome uai.MainCommandParam.Value
-(*
+
 module BinaryUnionArgInfoSerializer =
     open System.Text
 
-    type ISerializer<'t> =
-        abstract member Write: writer: BinaryWriter -> value: 't -> unit
-        abstract member Read: reader: BinaryReader -> 't
+    let private writeOpt (writer: BinaryWriter) (value: 'a option) (valueWriter: BinaryWriter -> 'a -> unit) =
+        match value with
+        | Some value ->
+            writer.Write(true)
+            valueWriter writer value
+        | None ->
+            writer.Write(false)
 
-    let stringSerializer = { new ISerializer<string> with
-                                 member __.Write w v = w.Write(v)
-                                 member __.Read r = r.ReadString() }
+    let private writeSeq (writer: BinaryWriter) (value: 'a seq) (valueWriter: BinaryWriter -> 'a -> unit) =
+        let collection =
+            if value :? ICollection<'a> then
+                value :?> ICollection<'a>
+            else
+                value |> Array.ofSeq :> ICollection<'a>
 
-    let intSerializer = { new ISerializer<int> with
-                              member __.Write w v = w.Write(v)
-                              member __.Read r = r.ReadInt32() }
+        writer.Write(collection.Count)
+        for item in collection do
+            valueWriter writer item
 
-    let private serializeHelpParam (writer: BinaryWriter) (helpParam: HelpParam) =
+    let inline private writeString (writer: BinaryWriter) (s: string) =
+        writer.Write(s)
+
+    let inline private writeOptString (writer: BinaryWriter) (s: string option) =
+        writeOpt writer s writeString
+
+    let private writeHelpParam (writer: BinaryWriter) (helpParam: HelpParam) =
+        writeSeq writer helpParam.Flags writeString
+        writeString writer helpParam.Description
         ()
 
-    let private serializeCase (writer: BinaryWriter) (case: UnionCaseArgInfo) =
+    let private writeFieldParserInfo (writer: BinaryWriter) (fieldParserInfo: FieldParserInfo) =
+        writer.Write(fieldParserInfo.Name)
+        writeOptString writer fieldParserInfo.Label
+        writer.Write(fieldParserInfo.Type.FullName)
+        // Parser
+        // UnParser
         ()
 
-    let serialize (info: UnionArgInfo) =
-        use stream = new MemoryStream()
-        use writer = new BinaryWriter(stream, Encoding.UTF8)
+    let rec private writeParameterInfo (writer: BinaryWriter) (parameterInfo: ParameterInfo) =
+        match parameterInfo with
+        | Primitives fieldParserInfos ->
+            writer.Write(1)
+            writeSeq writer fieldParserInfos writeFieldParserInfo
+        | OptionalParam (existential, fieldParserInfo) ->
+            writer.Write(2)
+            writer.Write(existential.Type.FullName)
+            writeFieldParserInfo writer fieldParserInfo
+        | ListParam (existential, fieldParserInfo) ->
+            writer.Write(3)
+            writer.Write(existential.Type.FullName)
+            writeFieldParserInfo writer fieldParserInfo
+        | SubCommand (shape, argInfo, label) ->
+            writer.Write(3)
+            writer.Write(shape.Type.FullName)
+            writeUnionArgInfo writer argInfo
+            writeOptString writer label
 
+    and private writeCase (writer: BinaryWriter) (case: UnionCaseArgInfo) =
+        writer.Write(case.Name.Value)
+        writer.Write(case.Depth)
+        writer.Write(case.Arity)
+        writer.Write(case.UnionCaseInfo.DeclaringType.FullName)
+        writer.Write(case.UnionCaseInfo.Tag)
+        writeParameterInfo writer case.ParameterInfo.Value
+        // GetParent
+        // CaseCtor
+        // FieldCtor
+        // FieldReader
+        writeSeq writer case.CommandLineNames.Value writeString
+        writeOptString writer case.AppSettingsName.Value
+        writeString writer case.Description.Value
+        writeSeq writer case.AppSettingsSeparators writeString
+        writer.Write(int case.AppSettingsSplitOptions)
+        writeOpt writer case.CustomAssignmentSeparator.Value writeString
+        // AssignmentParser
+        writer.Write(int case.CliPosition.Value)
+        writeOptString writer case.MainCommandName.Value
+        writer.Write(case.IsRest.Value)
+        writer.Write(case.AppSettingsCSV.Value)
+        writer.Write(case.IsMandatory.Value)
+        writer.Write(case.IsInherited.Value)
+        writer.Write(case.IsUnique.Value)
+        writer.Write(case.IsHidden.Value)
+        writer.Write(case.IsGatherUnrecognized.Value)
+        writer.Write(case.GatherAllSources.Value)
+        ()
+
+    and private writeUnionArgInfo (writer: BinaryWriter) (info: UnionArgInfo) =
         writer.Write(info.Type.FullName)
         writer.Write(info.Depth)
-        writer.Write(info.Cases.Value.Length)
-        for case in info.Cases.Value do
-            serializeCase writer case
-        serializeHelpParam writer info.HelpParam
+        // TryGetParent
+        writeSeq writer info.Cases.Value writeCase
+        writeHelpParam writer info.HelpParam
         writer.Write(info.ContainsSubcommands.Value)
         writer.Write(info.IsRequiredSubcommand.Value)
-        for case in info.InheritedParams.Value do
-            serializeCase writer case
-*)
+        // TagReader
+        writeSeq writer info.InheritedParams.Value writeCase
+        // GroupedSwitchExtractor
+        writeSeq writer info.AppSettingsParamIndex.Value (fun _ pair ->
+            writer.Write(pair.Key)
+            writeCase writer pair.Value)
+
+        writeSeq writer info.CliParamIndex.Value (fun _ (key,value) ->
+            writer.Write(key)
+            writeCase writer value)
+        writeOpt writer info.UnrecognizedGatherParam.Value writeCase
+        writeOpt writer info.MainCommandParam.Value writeCase
+
+    let private serialize (info: UnionArgInfo) =
+        use stream = new MemoryStream()
+        use gzip = new GZipStream(stream, CompressionMode.Compress)
+        use writer = new BinaryWriter(gzip, Encoding.UTF8)
+
+        writeUnionArgInfo writer info
+        writer.Dispose()
+        gzip.Dispose()
+        stream.ToArray()
+
+    let save (info: UnionArgInfo) =
+        Convert.ToBase64String(serialize info)
 
 [<NoEquality; NoComparison>]
 type UnionCaseParseResult =

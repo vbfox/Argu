@@ -4,6 +4,7 @@ open System
 
 open FSharp.Quotations
 open FSharp.Reflection
+open UnionArgInfo
 
 /// The Argu type generates an argument parser given a type argument
 /// that is an F# discriminated union. It can then be used to parse command line arguments
@@ -114,6 +115,9 @@ and [<Sealed; NoEquality; NoComparison; AutoSerializable(false)>]
             | Some true -> argInfoNoCheck.Value
             | _ -> argInfoWithCheck.Value
         new ArgumentParser<'Template>(argInfo, programName, helpTextMessage, usageStringCharacterWidth, errorHandler)
+
+    member __.Save() =
+        BinaryUnionArgInfoSerializer.save argInfoNoCheck.Value
 
     /// <summary>Parse command line arguments only.</summary>
     /// <param name="inputs">The command line input. Taken from System.Environment if not specified.</param>

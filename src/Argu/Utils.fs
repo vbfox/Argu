@@ -11,6 +11,8 @@ open System.Text.RegularExpressions
 open FSharp.Reflection
 open FSharp.Quotations
 open FSharp.Quotations.Patterns
+open System.Collections
+open System.Collections.Generic
 
 let allBindings = BindingFlags.NonPublic ||| BindingFlags.Public ||| BindingFlags.Static ||| BindingFlags.Instance
 
@@ -109,8 +111,8 @@ and ITemplateFunc<'R> =
 /// reflected version of Unchecked.defaultof
 type Unchecked =
     static member UntypedDefaultOf(t : Type) =
-        Existential.FromType(t).Accept { 
-            new IFunc<obj> with 
+        Existential.FromType(t).Accept {
+            new IFunc<obj> with
                 member __.Invoke<'T> () = Unchecked.defaultof<'T> :> obj
             }
 
@@ -205,7 +207,7 @@ type StringExprBuilder () =
 
     member __.Combine(f : StringExpr<unit>, g : StringExpr<'T>) : StringExpr<'T> = fun b -> f b; g b
     member __.Delay (f : unit -> StringExpr<'T>) : StringExpr<'T> = fun b -> f () b
-        
+
     member __.For (xs : 'a seq, f : 'a -> StringExpr<unit>) : StringExpr<unit> =
         fun b ->
             use e = xs.GetEnumerator ()
@@ -233,7 +235,7 @@ module StringExpr =
 type PrefixDictionary<'Value>(keyVals : seq<string * 'Value>) =
     // could probably use a trie here, but cli arg names are relatively few
     // with relatively flat structure to get any real perf benefits
-    let keys, values = 
+    let keys, values =
         keyVals
         |> Seq.toArray
         |> Array.unzip
@@ -265,6 +267,10 @@ type PrefixDictionary<'Value>(keyVals : seq<string * 'Value>) =
         if maxPos < 0 then false
         else kresult <- keys.[maxPos] ; vresult <- values.[maxPos] ; true
 
+    member __.Count with get(): int = keys.Length
+    interface IEnumerable<string * 'Value> with
+        member __.GetEnumerator() = keyVals.GetEnumerator()
+        member __.GetEnumerator() = keyVals.GetEnumerator() :> IEnumerator
 
 /// Gets the default width of the current console window,
 /// if available.
@@ -281,7 +287,7 @@ let wordwrap (width:int) (inputText:string) =
 
         if i < 0 then
             max // No whitespace found; break at maximum length
-        else 
+        else
             // Find start of whitespace
             while i >= 0 && Char.IsWhiteSpace text.[pos + i] do
                 i <- i - 1
@@ -308,7 +314,7 @@ let wordwrap (width:int) (inputText:string) =
 
         // Copy this line of text, breaking into smaller lines as needed
         if eol > pos then
-            while eol > pos do 
+            while eol > pos do
                 let mutable len = eol - pos
 
                 if len > width then
