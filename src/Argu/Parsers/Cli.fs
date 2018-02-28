@@ -80,7 +80,7 @@ type CliParseResultAggregator internal (argInfo : UnionArgInfo, stack : CliParse
     let mutable lastResult : UnionCaseParseResult option = None
     let unrecognized = new ResizeArray<string>()
     let unrecognizedParseResults = new ResizeArray<obj>()
-    let results = argInfo.Cases.Value |> Array.map (fun _ -> new ResizeArray<UnionCaseParseResult> ())
+    let results = lazy(argInfo.Cases.Value |> Array.map (fun _ -> new ResizeArray<UnionCaseParseResult> ()))
 
     member val IsUsageRequested = false with get,set
 
@@ -101,7 +101,7 @@ type CliParseResultAggregator internal (argInfo : UnionArgInfo, stack : CliParse
         if result.CaseInfo.IsMainCommand then isMainCommandDefined <- true
 
         resultCount <- resultCount + 1
-        let agg = results.[result.Tag]
+        let agg = results.Value.[result.Tag]
         if result.CaseInfo.IsUnique.Value && agg.Count > 0 then
             error argInfo ErrorCode.CommandLine "argument '%s' has been specified more than once." result.CaseInfo.Name.Value
 
@@ -124,7 +124,7 @@ type CliParseResultAggregator internal (argInfo : UnionArgInfo, stack : CliParse
     member __.AppendUnrecognized(token:string) = unrecognized.Add token
 
     member __.ToUnionParseResults() =
-        { Cases = results |> Array.map (fun c -> c.ToArray()) ;
+        { Cases = results.Value |> Array.map (fun c -> c.ToArray()) ;
           UnrecognizedCliParams = Seq.toList unrecognized ;
           UnrecognizedCliParseResults = Seq.toList unrecognizedParseResults ;
           IsUsageRequested = __.IsUsageRequested }
@@ -409,7 +409,7 @@ let rec private parseCommandLinePartial (state : CliParseState) (argInfo : Union
 and private parseCommandLineInner (state : CliParseState) (argInfo : UnionArgInfo) =
     let results = state.ResultStack.CreateNextAggregator argInfo
     while not state.Reader.IsCompleted do parseCommandLinePartial state argInfo results
-    if argInfo.IsRequiredSubcommand.Value && not results.IsSubCommandDefined then
+    if not results.IsSubCommandDefined && argInfo.IsRequiredSubcommand.Value then
         error argInfo ErrorCode.CommandLine "no valid subcommand has been specified."
     results.ToUnionParseResults()
 
