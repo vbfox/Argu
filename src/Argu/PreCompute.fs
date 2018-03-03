@@ -224,6 +224,29 @@ module Helpers =
                 if not <| regex.IsMatch arg then [||]
                 else Array.init (arg.Length - 1) (fun i -> sprintf "-%c" arg.[i + 1]))
 
+    let caseCtor uci = lazy(FSharpValue.PreComputeUnionConstructor(uci, allBindings))
+    let fieldReader uci = lazy(FSharpValue.PreComputeUnionReader(uci, allBindings))
+
+    let tupleConstructor (types: Type[]) =
+        lazy(
+            match types.Length with
+            | 0 -> fun _ -> arguExn "internal error: attempting to call tuple constructor on nullary case."
+            | 1 -> fun (o:obj[]) -> o.[0]
+            | _ ->
+                let tupleType = FSharpType.MakeTupleType types
+                FSharpValue.PreComputeTupleConstructor tupleType)
+
+    let assignParser (customAssignmentSeparator: Lazy<string option>) =
+        lazy(
+            match customAssignmentSeparator.Value with
+            | None -> arguExn "internal error: attempting to call assign parser on invalid parameter."
+            | Some sep ->
+                let pattern = sprintf @"^(.+)%s(.+)$" (Regex.Escape sep)
+                let regex = new Regex(pattern, RegexOptions.RightToLeft ||| RegexOptions.Compiled)
+                fun token ->
+                    let m = regex.Match token
+                    if m.Success then Assignment(m.Groups.[1].Value, sep, m.Groups.[2].Value)
+                    else NoAssignment)
 
 /// generate argument parsing schema from given UnionCaseInfo
 let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : HelpParam option)
@@ -233,7 +256,7 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
     let fields = uci.GetFields()
     let types = fields |> Array.map (fun f -> f.PropertyType)
 
-    let caseCtor = lazy(FSharpValue.PreComputeUnionConstructor(uci, allBindings))
+    let caseCtor = Helpers.caseCtor uci
 
     // create a dummy instance for given union case
     let dummy = lazy(
@@ -401,26 +424,10 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
         | _ when Option.isSome appSettingsName.Value -> appSettingsName.Value.Value
         | _ -> arguExn "parameter '%O' needs to have at least one parse source." uci)
 
-    let fieldCtor = lazy(
-        match types.Length with
-        | 0 -> fun _ -> arguExn "internal error: attempting to call tuple constructor on nullary case."
-        | 1 -> fun (o:obj[]) -> o.[0]
-        | _ ->
-            let tupleType = FSharpType.MakeTupleType types
-            FSharpValue.PreComputeTupleConstructor tupleType)
+    let fieldReader = Helpers.fieldReader uci
+    let fieldCtor = Helpers.tupleConstructor types
 
-    let fieldReader = lazy(FSharpValue.PreComputeUnionReader(uci, allBindings))
-
-    let assignParser = lazy(
-        match customAssignmentSeparator.Value with
-        | None -> arguExn "internal error: attempting to call assign parser on invalid parameter."
-        | Some sep ->
-            let pattern = sprintf @"^(.+)%s(.+)$" (Regex.Escape sep)
-            let regex = new Regex(pattern, RegexOptions.RightToLeft ||| RegexOptions.Compiled)
-            fun token ->
-                let m = regex.Match token
-                if m.Success then Assignment(m.Groups.[1].Value, sep, m.Groups.[2].Value)
-                else NoAssignment)
+    let assignParser =
 
     if isAppSettingsCSV.Value && fields.Length <> 1 then
         arguExn "CSV attribute is only compatible with branches of unary fields."

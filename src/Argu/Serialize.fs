@@ -94,14 +94,11 @@ and private writeCase (writer: BinaryWriter) (case: UnionCaseArgInfo) =
 and private writeUnionArgInfo (writer: BinaryWriter) (info: UnionArgInfo) =
     writer.Write(info.Type.AssemblyQualifiedName)
     writer.Write(info.Depth)
-    // TryGetParent
     writeSeq writer info.Cases.Value writeCase
     writeHelpParam writer info.HelpParam
     writer.Write(info.ContainsSubcommands.Value)
     writer.Write(info.IsRequiredSubcommand.Value)
-    // TagReader
     writeSeq writer info.InheritedParams.Value writeCase
-    // GroupedSwitchExtractor
     writeSeq writer info.AppSettingsParamIndex.Value (fun _ pair ->
         writer.Write(pair.Key)
         writeCase writer pair.Value)
@@ -220,7 +217,7 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
     let description = readString reader
     let appSettingsSeparators = readArray reader readString
     let appSettingsSplitOptions = LanguagePrimitives.EnumOfValue<_, StringSplitOptions> (reader.ReadInt32())
-    let customAssignmentSeparator = readOpt reader readString
+    let customAssignmentSeparator = lazyConst (readOpt reader readString)
     let cliPosition = LanguagePrimitives.EnumOfValue<_, CliPosition> (reader.ReadInt32())
     let mainCommandName = readOptString reader
     let isRest = reader.ReadBoolean()
@@ -232,24 +229,34 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
     let isGatherUnrecognized = reader.ReadBoolean()
     let gatherAllSources = reader.ReadBoolean()
 
+    // --
+    // TODO: might be slow, measure it
+    let uci = FSharpType.GetUnionCases(Type.GetType(unionCaseType)).[unionCaseTag]
+    let fields = uci.GetFields()
+    let types = fields |> Array.map (fun f -> f.PropertyType)
+
+    let caseCtor = Helpers.caseCtor uci
+    let fieldReader = Helpers.fieldReader uci
+    let fieldCtor = Helpers.tupleConstructor types
+    let assignParser = Helpers.assignParser customAssignmentSeparator
+
     let uai = {
         Name = lazyConst name
         Depth = depth
         Arity = arity
-        // TODO: might be slow, measure it
-        UnionCaseInfo = FSharpType.GetUnionCases(Type.GetType(unionCaseType)).[unionCaseTag]
+        UnionCaseInfo = uci
         ParameterInfo = parameterInfo
         GetParent = getParent
-        CaseCtor = failwith ""
-        FieldCtor = failwith ""
-        FieldReader = failwith ""
+        CaseCtor = caseCtor
+        FieldCtor = fieldCtor
+        FieldReader = fieldReader
         CommandLineNames = lazy(List.ofArray commandLineNames)
         AppSettingsName = lazyConst appSettingsName
         Description = lazyConst description
         AppSettingsSeparators = appSettingsSeparators
         AppSettingsSplitOptions = appSettingsSplitOptions
-        CustomAssignmentSeparator = lazyConst customAssignmentSeparator
-        AssignmentParser = failwith ""
+        CustomAssignmentSeparator = customAssignmentSeparator
+        AssignmentParser = assignParser
         CliPosition = lazyConst cliPosition
         MainCommandName = lazyConst mainCommandName
         IsRest = lazyConst isRest
