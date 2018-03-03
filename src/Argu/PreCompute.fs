@@ -65,6 +65,12 @@ let mkPrimitiveParser (name : string) (parser : string -> 'T) (unparser : 'T -> 
         UnParser = fun o -> unparser (o :?> 'T)
     }
 
+let dict (s: ('key * 'value) []) =
+    let result = System.Collections.Generic.Dictionary<'key, 'value>(s.Length)
+    for (key, value) in s do
+        result.Add(key, value)
+    result :> System.Collections.Generic.IDictionary<_,_>
+
 let primitiveParsers = lazy(
     let mkParser name (pars : string -> 'a) unpars = typeof<'a>, mkPrimitiveParser name pars unpars in
     dict [|
@@ -166,7 +172,6 @@ let getPrimitiveParserByType label (t : Type) =
         match tryGetDuEnumerationParser label t with
         | Some p -> p
         | None ->
-
 
         // refine error messaging depending on the input time
         match t with
@@ -437,7 +442,7 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
         with _ -> arguExn "Error generating usage string from IArgParserTemplate for case %O." uci)
 
     let uai = {
-        UnionCaseInfo = uci
+        UnionCaseInfo = lazy(uci)
         Arity = fields.Length
         Depth = List.length stack - 1
         CaseCtor = caseCtor
@@ -529,7 +534,7 @@ and private preComputeUnionArgInfoInner (stack : Type list) (helpParam : HelpPar
 
     let appSettingsIndex = lazy(
         caseInfo.Value
-        |> Seq.choose (fun cs -> match cs.AppSettingsName.Value with Some name -> Some(name, cs) | None -> None)
+        |> Array.choose (fun cs -> match cs.AppSettingsName.Value with Some name -> Some(name, cs) | None -> None)
         |> dict)
 
     let unrecognizedParam = lazy(
@@ -545,7 +550,7 @@ and private preComputeUnionArgInfoInner (stack : Type list) (helpParam : HelpPar
         | _ -> arguExn "template type '%O' has specified the MainCommand attribute in more than one union cases." t)
 
     let result = {
-        Type = t
+        Type = lazy(t)
         Depth = List.length stack
         TryGetParent = tryGetParent
         Cases = caseInfo

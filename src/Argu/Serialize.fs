@@ -65,8 +65,8 @@ and private writeCase (writer: BinaryWriter) (case: UnionCaseArgInfo) =
     writer.Write(case.Name.Value)
     writer.Write(case.Depth)
     writer.Write(case.Arity)
-    writer.Write(case.UnionCaseInfo.DeclaringType.AssemblyQualifiedName)
-    writer.Write(case.UnionCaseInfo.Tag)
+    writer.Write(case.UnionCaseInfo.Value.DeclaringType.AssemblyQualifiedName)
+    writer.Write(case.UnionCaseInfo.Value.Tag)
     writeParameterInfo writer case.ParameterInfo.Value
     // GetParent
     // CaseCtor
@@ -92,7 +92,7 @@ and private writeCase (writer: BinaryWriter) (case: UnionCaseArgInfo) =
     ()
 
 and private writeUnionArgInfo (writer: BinaryWriter) (info: UnionArgInfo) =
-    writer.Write(info.Type.AssemblyQualifiedName)
+    writer.Write(info.Type.Value.AssemblyQualifiedName)
     writer.Write(info.Depth)
     writeSeq writer info.Cases.Value writeCase
     writeHelpParam writer info.HelpParam
@@ -122,15 +122,15 @@ let private serialize (info: UnionArgInfo) =
 let save (info: UnionArgInfo) =
     Convert.ToBase64String(serialize info)
 
-let private readArray<'a> (reader: BinaryReader) (elementReader: BinaryReader -> 'a): 'a[] =
+open System.Runtime.CompilerServices
+
+
+let private  readArray<'a> (reader: BinaryReader) (elementReader: BinaryReader -> 'a): 'a[] =
     let length = reader.ReadInt32()
     let result = Array.zeroCreate<'a> length
     for i = 0 to length-1 do
         result.[i] <- elementReader reader
     result
-
-let private readSeq<'a> (reader: BinaryReader) (elementReader: BinaryReader -> 'a): 'a seq =
-    readArray reader elementReader :> seq<_>
 
 let private readOpt<'a> (reader: BinaryReader) (elementReader: BinaryReader -> 'a): 'a option =
     let isSome = reader.ReadBoolean()
@@ -173,7 +173,7 @@ let private readHelpParam (reader: BinaryReader): HelpParam =
         Description = description
     }
 
-let private lazyConst x =
+let inline private lazyConst x =
     Lazy<_>(Func<_>(fun () -> x), false)
 
 let rec private readParameterInfo (tryGetCurrent : unit -> UnionCaseArgInfo option) (reader: BinaryReader): Lazy<ParameterInfo> =
@@ -230,14 +230,13 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
     let gatherAllSources = reader.ReadBoolean()
 
     // --
-    // TODO: might be slow, measure it
-    let uci = FSharpType.GetUnionCases(Type.GetType(unionCaseType)).[unionCaseTag]
-    let fields = uci.GetFields()
-    let types = fields |> Array.map (fun f -> f.PropertyType)
+    let uci = lazy(FSharpType.GetUnionCases(Type.GetType(unionCaseType)).[unionCaseTag])
+    let fields = lazy(uci.Value.GetFields())
+    let types = lazy(fields.Value |> Array.map (fun f -> f.PropertyType))
 
-    let caseCtor = Helpers.caseCtor uci
-    let fieldReader = Helpers.fieldReader uci
-    let fieldCtor = Helpers.tupleConstructor types
+    let caseCtor = lazy((Helpers.caseCtor uci.Value).Value)
+    let fieldReader = lazy((Helpers.fieldReader uci.Value).Value)
+    let fieldCtor = lazy((Helpers.tupleConstructor types.Value).Value)
     let assignParser = Helpers.assignParser customAssignmentSeparator
 
     let uai = {
@@ -291,7 +290,7 @@ and private readUnionArgInfo (tryGetParent : unit -> UnionCaseArgInfo option) (r
         let value = readCase reader
         key, value)
 
-    let cliParamIndex = readSeq reader (fun _ ->
+    let cliParamIndex = readArray reader (fun _ ->
         let key = reader.ReadString()
         let value = readCase reader
         key, value)
@@ -299,8 +298,7 @@ and private readUnionArgInfo (tryGetParent : unit -> UnionCaseArgInfo option) (r
     let mainCommandParam = readOpt reader readCase
 
     // ----
-    // TODO: Make lazy ?
-    let t = Type.GetType(typeName)
+    let t = lazy(Type.GetType(typeName))
 
     let result =
         {
@@ -311,7 +309,7 @@ and private readUnionArgInfo (tryGetParent : unit -> UnionCaseArgInfo option) (r
             HelpParam = helpParam
             ContainsSubcommands = lazyConst containsSubcommands
             IsRequiredSubcommand = lazyConst isRequiredSubcommand
-            TagReader = lazy(FSharpValue.PreComputeUnionTagReader(t, allBindings))
+            TagReader = lazy(FSharpValue.PreComputeUnionTagReader(t.Value, allBindings))
             InheritedParams = inheritedParams
             GroupedSwitchExtractor = Helpers.groupedSwitchExtractor caseInfo inheritedParams helpParam
             AppSettingsParamIndex =

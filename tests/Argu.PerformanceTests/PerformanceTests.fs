@@ -32,4 +32,5 @@ let main (args: string[]) =
         let _summary = BenchmarkRunner.Run<SerializedPerfTest>()
 
         ()
+    //let _summary = BenchmarkRunner.Run<SerializedPerfTest>()
     0
