@@ -426,8 +426,7 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
 
     let fieldReader = Helpers.fieldReader uci
     let fieldCtor = Helpers.tupleConstructor types
-
-    let assignParser =
+    let assignParser = Helpers.assignParser customAssignmentSeparator
 
     if isAppSettingsCSV.Value && fields.Length <> 1 then
         arguExn "CSV attribute is only compatible with branches of unary fields."
