@@ -86,8 +86,8 @@ and [<Sealed; NoEquality; NoComparison; AutoSerializable(false)>]
     inherit ArgumentParser(argInfo, _programName, helpTextMessage, _usageStringCharacterWidth, errorHandler)
 
     // memoize parser generation for given template type
-    static let argInfoNoCheck = lazy(preComputeUnionArgInfo<'Template> ())
-    static let argInfoWithCheck = lazy(checkUnionArgInfo argInfoNoCheck.Value)
+    static let mutable argInfoNoCheck = lazy(preComputeUnionArgInfo<'Template> ())
+    static let mutable argInfoWithCheck = lazy(checkUnionArgInfo argInfoNoCheck.Value)
 
     let mkUsageString argInfo msgOpt = mkUsageString argInfo _programName false _usageStringCharacterWidth msgOpt |> StringExpr.build
 
@@ -106,18 +106,33 @@ and [<Sealed; NoEquality; NoComparison; AutoSerializable(false)>]
     /// <param name="helpTextMessage">Message that will be displayed at the top of the help text.</param>
     /// <param name="usageStringCharacterWidth">Text width used when formatting the usage string. Defaults to 80 chars.</param>
     /// <param name="errorHandler">The implementation of IExiter used for error handling. Exception is default.</param>
-    new (?programName : string, ?helpTextMessage : string, ?usageStringCharacterWidth : int, ?errorHandler : IExiter, ?bypassDependencyGraphChecks: bool) =
+    new (?programName : string, ?helpTextMessage : string, ?usageStringCharacterWidth : int, ?errorHandler : IExiter, ?bypassDependencyGraphChecks: bool, ?serializedParser: string) =
         let usageStringCharacterWidth = match usageStringCharacterWidth with None -> getDefaultCharacterWidth() | Some w -> w
         let programName = match programName with Some pn -> pn | None -> currentProgramName.Value
         let errorHandler = match errorHandler with Some e -> e  | None -> new ExceptionExiter() :> _
+
+        if serializedParser.IsSome && (not argInfoWithCheck.IsValueCreated) then
+            match Serialize.tryLoad serializedParser.Value with
+            | Some x ->
+                argInfoNoCheck <- lazy(x)
+                argInfoWithCheck <- lazy(x)
+
+                argInfoNoCheck.Value |> ignore
+                argInfoWithCheck.Value |> ignore
+            | None -> ()
+
         let argInfo =
             match bypassDependencyGraphChecks with
             | Some true -> argInfoNoCheck.Value
             | _ -> argInfoWithCheck.Value
         new ArgumentParser<'Template>(argInfo, programName, helpTextMessage, usageStringCharacterWidth, errorHandler)
 
-    member __.Save() =
+    member __.Save(): string =
         Serialize.save argInfoNoCheck.Value
+
+    static member ClearArgInfoCache() =
+        argInfoNoCheck <- lazy(preComputeUnionArgInfo<'Template> ())
+        argInfoWithCheck <- lazy(checkUnionArgInfo argInfoNoCheck.Value)
 
     /// <summary>Parse command line arguments only.</summary>
     /// <param name="inputs">The command line input. Taken from System.Environment if not specified.</param>
@@ -264,8 +279,8 @@ type ArgumentParser with
     /// <param name="helpTextMessage">Message that will be displayed at the top of the help text.</param>
     /// <param name="usageStringCharacterWidth">Text width used when formatting the usage string. Defaults to 80 chars.</param>
     /// <param name="errorHandler">The implementation of IExiter used for error handling. Exception is default.</param>
-    static member Create<'Template when 'Template :> IArgParserTemplate>(?programName : string, ?helpTextMessage : string, ?usageStringCharacterWidth : int, ?errorHandler : IExiter, ?bypassDependencyGraphChecks: bool) =
-        new ArgumentParser<'Template>(?programName = programName, ?helpTextMessage = helpTextMessage, ?errorHandler = errorHandler, ?usageStringCharacterWidth = usageStringCharacterWidth, ?bypassDependencyGraphChecks = bypassDependencyGraphChecks)
+    static member Create<'Template when 'Template :> IArgParserTemplate>(?programName : string, ?helpTextMessage : string, ?usageStringCharacterWidth : int, ?errorHandler : IExiter, ?bypassDependencyGraphChecks: bool, ?serializedParser: string) =
+        new ArgumentParser<'Template>(?programName = programName, ?helpTextMessage = helpTextMessage, ?errorHandler = errorHandler, ?usageStringCharacterWidth = usageStringCharacterWidth, ?bypassDependencyGraphChecks = bypassDependencyGraphChecks, ?serializedParser = serializedParser)
 
 
 [<AutoOpen>]

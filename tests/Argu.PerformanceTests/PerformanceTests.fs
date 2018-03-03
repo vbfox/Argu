@@ -16,7 +16,20 @@ let main (args: string[]) =
         printfn "%s" (parser.Save())
         System.IO.File.WriteAllText("parser.txt", parser.Save())
         System.IO.File.WriteAllBytes("parser.bin", System.Convert.FromBase64String(parser.Save()))
+    else if args.Length >= 1 && args.[0] = "load" then
+        let saved = System.IO.File.ReadAllText("parser.txt")
+        let parser =
+            Argu.ArgumentParser.Create<PaketCommands.Command>(
+                programName = "paket",
+                errorHandler = new Argu.ExceptionExiter(),
+                serializedParser = saved)
+
+        let parseResult = parser.Parse([|"add";"nuget";"Foo.Bar"|])
+        printfn "%A" parseResult
+
     else
-        let _summary = BenchmarkRunner.Run<PerfTest>()
+        //let _summary = BenchmarkRunner.Run<PerfTest>()
+        let _summary = BenchmarkRunner.Run<SerializedPerfTest>()
+
         ()
     0

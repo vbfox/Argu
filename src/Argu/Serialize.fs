@@ -335,6 +335,9 @@ let private deserialize (data: byte[]): UnionArgInfo =
 
     readUnionArgInfo (fun () -> None) reader
 
-let load (data: string): UnionArgInfo =
-    let bytes = Convert.FromBase64String(data)
-    deserialize bytes
+let tryLoad (data: string): UnionArgInfo option =
+    if (isNull data) || (data.Length = 0) then
+        None
+    else
+        let bytes = Convert.FromBase64String(data)
+        Some (deserialize bytes)
