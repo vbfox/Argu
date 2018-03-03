@@ -22,6 +22,7 @@
     <Compile Include="..\Argu\ConfigReaders.fs" Link="ConfigReaders.fs" />
     <Compile Include="..\Argu\UnionArgInfo.fs" Link="UnionArgInfo.fs" />
     <Compile Include="..\Argu\PreCompute.fs" Link="PreCompute.fs" />
+    <Compile Include="..\Argu\Serialize.fs" Link="Serialize.fs" />
     <Compile Include="..\Argu\UnParsers.fs" Link="UnParsers.fs" />
     <Compile Include="..\Argu\ParseResults.fs" Link="ParseResults.fs" />
     <Compile Include="..\Argu\Parsers\Common.fs" Link="Parsers\Common.fs" />

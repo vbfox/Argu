@@ -117,7 +117,7 @@ and [<Sealed; NoEquality; NoComparison; AutoSerializable(false)>]
         new ArgumentParser<'Template>(argInfo, programName, helpTextMessage, usageStringCharacterWidth, errorHandler)
 
     member __.Save() =
-        BinaryUnionArgInfoSerializer.save argInfoNoCheck.Value
+        Serialize.save argInfoNoCheck.Value
 
     /// <summary>Parse command line arguments only.</summary>
     /// <param name="inputs">The command line input. Taken from System.Environment if not specified.</param>

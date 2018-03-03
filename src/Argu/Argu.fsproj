@@ -23,6 +23,7 @@
     <Compile Include="ConfigReaders.fs" />
     <Compile Include="UnionArgInfo.fs" />
     <Compile Include="PreCompute.fs" />
+    <Compile Include="Serialize.fs" />
     <Compile Include="UnParsers.fs" />
     <Compile Include="ParseResults.fs" />
     <Compile Include="Parsers\Common.fs" />
