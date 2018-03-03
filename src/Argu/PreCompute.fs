@@ -200,6 +200,31 @@ let getHierarchy (uai : UnionArgInfo) =
 
     aux [] uai
 
+module Helpers =
+    /// recognizes and extracts grouped switches
+    /// e.g. -efx --> -e -f -x
+    let groupedSwitchExtractor (caseInfo: Lazy<UnionCaseArgInfo[]>) (inheritedParams: Lazy<UnionCaseArgInfo[]>) (helpParam: HelpParam) =
+        lazy(
+            let chars =
+                caseInfo.Value
+                |> Seq.append inheritedParams.Value
+                |> Seq.collect (fun c -> c.CommandLineNames.Value)
+                |> Seq.append helpParam.Flags
+                |> Seq.filter (fun name -> name.Length = 2 && name.[0] = '-' && Char.IsLetterOrDigit name.[1])
+                |> Seq.map (fun name -> name.[1])
+                |> Seq.distinct
+                |> Seq.toArray
+                |> String
+
+            if chars.Length = 0 then (fun _ -> [||]) else
+
+            let regex = new Regex(sprintf "^-[%s]+$" chars, RegexOptions.Compiled)
+
+            fun (arg : string) ->
+                if not <| regex.IsMatch arg then [||]
+                else Array.init (arg.Length - 1) (fun i -> sprintf "-%c" arg.[i + 1]))
+
+
 /// generate argument parsing schema from given UnionCaseInfo
 let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : HelpParam option)
                                             (getParent : unit -> UnionArgInfo)
@@ -488,28 +513,6 @@ and private preComputeUnionArgInfoInner (stack : Type list) (helpParam : HelpPar
             |> Seq.append pInfo.InheritedParams.Value
             |> Seq.toArray)
 
-    // recognizes and extracts grouped switches
-    // e.g. -efx --> -e -f -x
-    let groupedSwitchExtractor = lazy(
-        let chars =
-            caseInfo.Value
-            |> Seq.append inheritedParams.Value
-            |> Seq.collect (fun c -> c.CommandLineNames.Value)
-            |> Seq.append helpParam.Flags
-            |> Seq.filter (fun name -> name.Length = 2 && name.[0] = '-' && Char.IsLetterOrDigit name.[1])
-            |> Seq.map (fun name -> name.[1])
-            |> Seq.distinct
-            |> Seq.toArray
-            |> String
-
-        if chars.Length = 0 then (fun _ -> [||]) else
-
-        let regex = new Regex(sprintf "^-[%s]+$" chars, RegexOptions.Compiled)
-
-        fun (arg : string) ->
-            if not <| regex.IsMatch arg then [||]
-            else Array.init (arg.Length - 1) (fun i -> sprintf "-%c" arg.[i + 1]))
-
     let tagReader = lazy(FSharpValue.PreComputeUnionTagReader(t, allBindings))
 
     let cliIndex = lazy(
@@ -544,7 +547,7 @@ and private preComputeUnionArgInfoInner (stack : Type list) (helpParam : HelpPar
         HelpParam = helpParam
         ContainsSubcommands = containsSubcommands
         IsRequiredSubcommand = isRequiredSubcommand
-        GroupedSwitchExtractor = groupedSwitchExtractor
+        GroupedSwitchExtractor = Helpers.groupedSwitchExtractor caseInfo inheritedParams helpParam
         AppSettingsParamIndex = appSettingsIndex
         InheritedParams = inheritedParams
         CliParamIndex = cliIndex

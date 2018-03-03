@@ -5,6 +5,7 @@ open System.Collections.Generic
 open System.IO
 open System.IO.Compression
 open System.Text
+open Microsoft.FSharp.Reflection
 
 let private writeOpt (writer: BinaryWriter) (value: 'a option) (valueWriter: BinaryWriter -> 'a -> unit) =
     match value with
@@ -37,11 +38,8 @@ let private writeHelpParam (writer: BinaryWriter) (helpParam: HelpParam) =
     ()
 
 let private writeFieldParserInfo (writer: BinaryWriter) (fieldParserInfo: FieldParserInfo) =
-    writer.Write(fieldParserInfo.Name)
     writeOptString writer fieldParserInfo.Label
     writer.Write(fieldParserInfo.Type.AssemblyQualifiedName)
-    // Parser
-    // UnParser
     ()
 
 let rec private writeParameterInfo (writer: BinaryWriter) (parameterInfo: ParameterInfo) =
@@ -52,11 +50,11 @@ let rec private writeParameterInfo (writer: BinaryWriter) (parameterInfo: Parame
     | OptionalParam (existential, fieldParserInfo) ->
         writer.Write(2uy)
         writer.Write(existential.Type.AssemblyQualifiedName)
-        writeFieldParserInfo writer fieldParserInfo
+        writeOpt writer fieldParserInfo.Label writeString
     | ListParam (existential, fieldParserInfo) ->
         writer.Write(3uy)
         writer.Write(existential.Type.AssemblyQualifiedName)
-        writeFieldParserInfo writer fieldParserInfo
+        writeOpt writer fieldParserInfo.Label writeString
     | SubCommand (shape, argInfo, label) ->
         writer.Write(4uy)
         writer.Write(shape.Type.AssemblyQualifiedName)
@@ -151,24 +149,24 @@ let inline private readString (reader: BinaryReader) =
 let inline private readOptString (reader: BinaryReader) =
     readOpt reader readString
 
-let private readShapeArgumentTemplate (reader: BinaryReader): ShapeArgumentTemplate =
+let private readShapeArgumentTemplate (reader: BinaryReader): Lazy<ShapeArgumentTemplate> =
     let typeName = reader.ReadString()
-    let type' = System.Type.GetType(typeName)
-    ShapeArgumentTemplate.FromType(type')
+    lazy(
+        let type' = System.Type.GetType(typeName)
+        ShapeArgumentTemplate.FromType(type'))
 
-let private readExistential (reader: BinaryReader): Existential =
+let private readExistential (reader: BinaryReader): Lazy<Existential> =
     let typeName = reader.ReadString()
-    let type' = System.Type.GetType(typeName)
-    Existential.FromType(type')
+    lazy(
+        let type' = System.Type.GetType(typeName)
+        Existential.FromType(type'))
 
-let private readFieldParserInfo (reader: BinaryReader): FieldParserInfo =
-    let name = reader.ReadString()
+let private readFieldParserInfo (reader: BinaryReader): Lazy<FieldParserInfo> =
     let label = readOptString reader
     let typeName = reader.ReadString()
-    let type' = System.Type.GetType(typeName)
-    // Parser
-    // UnParser
-    failwith "boom"
+    lazy(
+        let type' = System.Type.GetType(typeName)
+        getPrimitiveParserByType label type')
 
 let private readHelpParam (reader: BinaryReader): HelpParam =
     let flags = readArray reader readString |> List.ofArray
@@ -178,76 +176,113 @@ let private readHelpParam (reader: BinaryReader): HelpParam =
         Description = description
     }
 
-let rec private readParameterInfo (reader: BinaryReader): ParameterInfo =
-    // TODO: Reading data and materializing types should be 2 different steps
-    // Most times data need ot be read but not materialized
-    // Guess it depend on how much we lose doing GetType & friend
+let private lazyConst x =
+    Lazy<_>(Func<_>(fun () -> x), false)
+
+let rec private readParameterInfo (tryGetCurrent : unit -> UnionCaseArgInfo option) (reader: BinaryReader): Lazy<ParameterInfo> =
     let case = reader.ReadByte()
     match case with
     | 1uy ->
         let infos = readArray reader readFieldParserInfo
-        Primitives infos
+        lazy(
+            let infos = infos |> Array.map (fun l -> l.Value)
+            Primitives infos)
     | 2uy ->
         let existential = readExistential reader
-        let info = readFieldParserInfo reader
-        OptionalParam (existential, info)
+        let label = readOpt reader readString
+        lazy(
+            OptionalParam (existential.Value, getPrimitiveParserByType label existential.Value.Type))
     | 3uy ->
         let existential = readExistential reader
-        let info = readFieldParserInfo reader
-        ListParam (existential, info)
+        let label = readOpt reader readString
+        lazy(
+            ListParam (existential.Value, getPrimitiveParserByType label existential.Value.Type))
     | 4uy ->
         let shape = readShapeArgumentTemplate reader
-        let argInfo = readUnionArgInfo reader
+        let argInfo = readUnionArgInfo tryGetCurrent reader
         let label = readOptString reader
-        SubCommand (shape, argInfo, label)
+        lazy(SubCommand (shape.Value, argInfo, label))
     |_ -> failwith "Not supported"
 
-and private readCase (reader: BinaryReader): UnionCaseArgInfo =
+and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): UnionCaseArgInfo =
+    let current = ref None
+    let tryGetCurrent = fun () -> !current
+
     let name = reader.ReadString()
     let depth = reader.ReadInt32()
     let arity = reader.ReadInt32()
     let unionCaseType = reader.ReadString()
     let unionCaseTag = reader.ReadInt32()
-    let parameterInfo = readParameterInfo reader
-    // GetParent
-    // CaseCtor
-    // FieldCtor
-    // FieldReader
-    let commandLineNames = readSeq reader readString
+
+    let parameterInfo = readParameterInfo tryGetCurrent reader
+    let commandLineNames = readArray reader readString
     let appSettingsName = readOptString reader
     let description = readString reader
-    let appSettingsSeparators = readSeq reader readString
+    let appSettingsSeparators = readArray reader readString
     let appSettingsSplitOptions = LanguagePrimitives.EnumOfValue<_, StringSplitOptions> (reader.ReadInt32())
     let customAssignmentSeparator = readOpt reader readString
-    // AssignmentParser
     let cliPosition = LanguagePrimitives.EnumOfValue<_, CliPosition> (reader.ReadInt32())
-    let MainCommandName = readOptString reader
+    let mainCommandName = readOptString reader
     let isRest = reader.ReadBoolean()
-    let AppSettingsCSV = reader.ReadBoolean()
-    let IsMandatory = reader.ReadBoolean()
-    let IsInherited = reader.ReadBoolean()
-    let IsUnique = reader.ReadBoolean()
-    let IsHidden = reader.ReadBoolean()
-    let IsGatherUnrecognized = reader.ReadBoolean()
-    let GatherAllSources = reader.ReadBoolean()
+    let appSettingsCSV = reader.ReadBoolean()
+    let isMandatory = reader.ReadBoolean()
+    let isInherited = reader.ReadBoolean()
+    let isUnique = reader.ReadBoolean()
+    let isHidden = reader.ReadBoolean()
+    let isGatherUnrecognized = reader.ReadBoolean()
+    let gatherAllSources = reader.ReadBoolean()
 
-    failwith "boom"
+    let uai = {
+        Name = lazyConst name
+        Depth = depth
+        Arity = arity
+        // TODO: might be slow, measure it
+        UnionCaseInfo = FSharpType.GetUnionCases(Type.GetType(unionCaseType)).[unionCaseTag]
+        ParameterInfo = parameterInfo
+        GetParent = getParent
+        CaseCtor = failwith ""
+        FieldCtor = failwith ""
+        FieldReader = failwith ""
+        CommandLineNames = lazy(List.ofArray commandLineNames)
+        AppSettingsName = lazyConst appSettingsName
+        Description = lazyConst description
+        AppSettingsSeparators = appSettingsSeparators
+        AppSettingsSplitOptions = appSettingsSplitOptions
+        CustomAssignmentSeparator = lazyConst customAssignmentSeparator
+        AssignmentParser = failwith ""
+        CliPosition = lazyConst cliPosition
+        MainCommandName = lazyConst mainCommandName
+        IsRest = lazyConst isRest
+        AppSettingsCSV = lazyConst appSettingsCSV
+        IsMandatory = lazyConst isMandatory
+        IsInherited = lazyConst isInherited
+        IsUnique = lazyConst isUnique
+        IsHidden = lazyConst isHidden
+        IsGatherUnrecognized = lazyConst isGatherUnrecognized
+        GatherAllSources = lazyConst gatherAllSources
+    }
 
-and private readUnionArgInfo (reader: BinaryReader): UnionArgInfo =
+    current := Some uai // assign result to children
+    uai
+
+and private readUnionArgInfo (tryGetParent : unit -> UnionCaseArgInfo option) (reader: BinaryReader): UnionArgInfo =
+    let current = ref Unchecked.defaultof<_>
+    let readCase = readCase (fun () -> !current)
+
     let typeName = reader.ReadString()
     let depth = reader.ReadInt32()
     // TryGetParent
-    let cases = readSeq reader readCase
+    let caseInfo = lazyConst (readArray reader readCase)
     let helpParam = readHelpParam reader
     let containsSubcommands = reader.ReadBoolean()
     let isRequiredSubcommand = reader.ReadBoolean()
     // TagReader
-    let inheritedParams = readSeq reader readCase
+    let inheritedParams = lazyConst (readArray reader readCase)
     // GroupedSwitchExtractor
-    let appSettingsParamIndex = readSeq reader (fun _ ->
+    let appSettingsParamIndex = readArray reader (fun _ ->
         let key = reader.ReadString()
         let value = readCase reader
-        KeyValuePair<_, _>(key, value))
+        key, value)
 
     let cliParamIndex = readSeq reader (fun _ ->
         let key = reader.ReadString()
@@ -255,29 +290,43 @@ and private readUnionArgInfo (reader: BinaryReader): UnionArgInfo =
         key, value)
     let unrecognizedGatherParam = readOpt reader readCase
     let mainCommandParam = readOpt reader readCase
-    {
-        Type = failwith "boom"
-        Depth = failwith "boom"
-        TryGetParent = failwith "boom"
-        Cases = failwith "boom"
-        HelpParam = failwith "boom"
-        ContainsSubcommands = failwith "boom"
-        IsRequiredSubcommand = failwith "boom"
-        TagReader = failwith "boom"
-        InheritedParams = failwith "boom"
-        GroupedSwitchExtractor = failwith "boom"
-        AppSettingsParamIndex = failwith "boom"
-        CliParamIndex = failwith "boom"
-        UnrecognizedGatherParam = failwith "boom"
-        MainCommandParam = failwith "boom"
-    }
+
+    // ----
+    // TODO: Make lazy ?
+    let t = Type.GetType(typeName)
+
+    let result =
+        {
+            Type = t
+            Depth = depth
+            TryGetParent = tryGetParent
+            Cases = caseInfo
+            HelpParam = helpParam
+            ContainsSubcommands = lazyConst containsSubcommands
+            IsRequiredSubcommand = lazyConst isRequiredSubcommand
+            TagReader = lazy(FSharpValue.PreComputeUnionTagReader(t, allBindings))
+            InheritedParams = inheritedParams
+            GroupedSwitchExtractor = Helpers.groupedSwitchExtractor caseInfo inheritedParams helpParam
+            AppSettingsParamIndex =
+                lazy(
+                    let dict = Dictionary<_,_>(appSettingsParamIndex.Length)
+                    for (key,value) in appSettingsParamIndex do
+                        dict.Add(key, value)
+                    dict :> IDictionary<_,_>)
+            CliParamIndex = lazy(PrefixDictionary(cliParamIndex))
+            UnrecognizedGatherParam = lazyConst unrecognizedGatherParam
+            MainCommandParam = lazyConst mainCommandParam
+        }
+
+    current := result
+    result
 
 let private deserialize (data: byte[]): UnionArgInfo =
     use stream = new MemoryStream(data)
     use gzip = new GZipStream(stream, CompressionMode.Decompress)
     use reader = new BinaryReader(gzip, Encoding.UTF8)
 
-    readUnionArgInfo reader
+    readUnionArgInfo (fun () -> None) reader
 
 let load (data: string): UnionArgInfo =
     let bytes = Convert.FromBase64String(data)
