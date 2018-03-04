@@ -40,10 +40,10 @@ let generateAppSettingsName (uci : UnionCaseInfo) =
 let generateCommandName (uci : UnionCaseInfo) =
     uci.Name.ToUpperInvariant().Replace('_', ' ')
 
-let private defaultLabelRegex = new Regex(@"^Item[0-9]*$", RegexOptions.Compiled)
+let private defaultLabelRegex = lazy(new Regex(@"^Item[0-9]*$", RegexOptions.Compiled))
 /// Generates an argument label name from given PropertyInfo
 let tryExtractUnionParameterLabel (p : PropertyInfo) =
-    if defaultLabelRegex.IsMatch p.Name then None
+    if defaultLabelRegex.Value.IsMatch p.Name then None
     else Some(p.Name.Replace('_',' '))
 
 let (|NestedParseResults|Optional|List|Other|) (t : Type) =
@@ -187,11 +187,12 @@ let validateCliParam (name : string) =
 
 let validSeparatorChars = [|'=' ; ':' ; '.' ; '#' ; '+' ; '^' ; '&' ; '?' ; '%' ; '$' ; '~' ; '@'|]
 let private validSeparatorRegex =
-    let escapedChars = new String(validSeparatorChars) |> Regex.Escape
-    new Regex(@"[" + escapedChars + "]+" , RegexOptions.Compiled)
+    lazy(
+        let escapedChars = new String(validSeparatorChars) |> Regex.Escape
+        new Regex(@"[" + escapedChars + "]+" , RegexOptions.Compiled))
 
 let validateSeparator (uci : UnionCaseInfo) (sep : string) =
-    if sep = null || not <| validSeparatorRegex.IsMatch sep then
+    if sep = null || not <| validSeparatorRegex.Value.IsMatch sep then
         let allowedchars = validSeparatorChars |> Seq.map (fun c -> String([|''';c;'''|])) |> String.concat ", "
         arguExn "parameter '%O' specifies invalid separator '%s' in CustomAssignment attribute.%sAllowed characters: %s"
             uci sep Environment.NewLine allowedchars

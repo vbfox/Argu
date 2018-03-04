@@ -186,9 +186,9 @@ let expr2Uci (e : Expr) =
 
     aux None [] e
 
-let private whitespaceRegex = new Regex(@"\s", RegexOptions.Compiled)
+let private whitespaceRegex = lazy(new Regex(@"\s", RegexOptions.Compiled))
 let escapeCliString (value : string) =
-    if whitespaceRegex.IsMatch value then sprintf "'%s'" value
+    if whitespaceRegex.Value.IsMatch value then sprintf "'%s'" value
     else value
 
 let flattenCliTokens (tokens : seq<string>) =
