@@ -105,7 +105,7 @@ type CliParseResultAggregator internal (argInfo : UnionArgInfo, stack : CliParse
         if result.CaseInfo.IsUnique.Value && agg.Count > 0 then
             error argInfo ErrorCode.CommandLine "argument '%s' has been specified more than once." result.CaseInfo.Name.Value
 
-        if result.CaseInfo.Type = ArgumentType.SubCommand then
+        if result.CaseInfo.ArgumentType = ArgumentType.SubCommand then
             isSubCommandDefined <- true
 
         agg.Add result

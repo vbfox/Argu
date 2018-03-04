@@ -206,7 +206,7 @@ type ParseResults<'Template when 'Template :> IArgParserTemplate>
         results.Cases
         |> Seq.concat
         |> Seq.tryPick(fun c ->
-            if c.CaseInfo.Type = ArgumentType.SubCommand then
+            if c.CaseInfo.ArgumentType = ArgumentType.SubCommand then
                 Some(c.Value :?> 'Template)
             else None)
 

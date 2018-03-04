@@ -52,7 +52,8 @@ let main (args: string[]) =
     else if args.Length >= 1 && args.[0] = "load" then
         let saved = System.IO.File.ReadAllText("parser.txt")
         let subCommand = load saved
-        printfn "%A" subCommand
+        System.GC.KeepAlive(subCommand)
+        //printfn "%A" subCommand
 
     else
         //let _summary = BenchmarkRunner.Run<PerfTest>()

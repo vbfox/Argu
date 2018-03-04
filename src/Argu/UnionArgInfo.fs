@@ -66,6 +66,9 @@ type UnionCaseArgInfo =
         /// Field parser definitions or nested union argument
         ParameterInfo : Lazy<ParameterInfo>
 
+        /// Type of argument in ParameterInfo
+        ArgumentType : ArgumentType
+
         /// Gets the parent record for union case
         GetParent : unit -> UnionArgInfo
 
@@ -118,7 +121,6 @@ type UnionCaseArgInfo =
 with
     member inline __.IsMainCommand = Option.isSome __.MainCommandName.Value
     member inline __.IsCommandLineArg = match __.CommandLineNames.Value with [] -> __.IsMainCommand | _ -> true
-    member inline __.Type = __.ParameterInfo.Value.Type
     member inline __.IsCustomAssignment = Option.isSome __.CustomAssignmentSeparator.Value
 
 and ParameterInfo =
@@ -211,7 +213,7 @@ type UnionCaseArgInfo with
     member ucai.ToArgumentCaseInfo() : ArgumentCaseInfo =
         {
             Name = ucai.Name
-            ArgumentType = ucai.Type
+            ArgumentType = ucai.ArgumentType
             UnionCaseInfo = ucai.UnionCaseInfo.Value
             CommandLineNames = ucai.CommandLineNames
             AppSettingsName = ucai.AppSettingsName

@@ -59,23 +59,21 @@ let private beginBlock (writer: BinaryWriter) =
     newWriter, disposable
 
 let rec private writeParameterInfo (writer: BinaryWriter) (parameterInfo: ParameterInfo) =
+    writer.Write(byte parameterInfo.Type)
+
     let writer, disposable = beginBlock writer
     use __ = disposable
 
     match parameterInfo with
     | Primitives fieldParserInfos ->
-        writer.Write(1uy)
         writeSeq writer fieldParserInfos writeFieldParserInfo
     | OptionalParam (existential, fieldParserInfo) ->
-        writer.Write(2uy)
         writer.Write(existential.Type.AssemblyQualifiedName)
         writeOpt writer fieldParserInfo.Label writeString
     | ListParam (existential, fieldParserInfo) ->
-        writer.Write(3uy)
         writer.Write(existential.Type.AssemblyQualifiedName)
         writeOpt writer fieldParserInfo.Label writeString
     | SubCommand (shape, argInfo, label) ->
-        writer.Write(4uy)
         writer.Write(shape.Type.AssemblyQualifiedName)
         writeUnionArgInfo writer argInfo
         writeOptString writer label
@@ -215,28 +213,29 @@ let blockAsLazy (reader: BinaryReader) (inner: BinaryReader -> 'a): Lazy<'a> =
         inner reader
     )
 
-let rec private readParameterInfo (tryGetCurrent : unit -> UnionCaseArgInfo option) (reader: BinaryReader): Lazy<ParameterInfo> =
-    blockAsLazy reader (fun (reader: BinaryReader) ->
-        let case = reader.ReadByte()
+let rec private readParameterInfo (tryGetCurrent : unit -> UnionCaseArgInfo option) (reader: BinaryReader): ArgumentType * Lazy<ParameterInfo> =
+    let case = LanguagePrimitives.EnumOfValue<_, ArgumentType> (int (reader.ReadByte()))
+    let parameterInfo = blockAsLazy reader (fun (reader: BinaryReader) ->
         match case with
-        | 1uy ->
+        | ArgumentType.Primitive ->
             let infos = readArray reader readFieldParserInfo
             let infos = infos |> Array.map (fun l -> l.Value)
             Primitives infos
-        | 2uy ->
+        | ArgumentType.Optional ->
             let existential = readExistential reader
             let label = readOpt reader readString
             OptionalParam (existential.Value, getPrimitiveParserByType label existential.Value.Type)
-        | 3uy ->
+        | ArgumentType.List ->
             let existential = readExistential reader
             let label = readOpt reader readString
             ListParam (existential.Value, getPrimitiveParserByType label existential.Value.Type)
-        | 4uy ->
+        | ArgumentType.SubCommand ->
             let shape = readShapeArgumentTemplate reader
             let argInfo = readUnionArgInfo tryGetCurrent reader
             let label = readOptString reader
             SubCommand (shape.Value, argInfo, label)
         |_ -> failwith "Not supported")
+    case, parameterInfo
 
 and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): UnionCaseArgInfo =
     let current = ref None
@@ -248,7 +247,7 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
     let unionCaseType = reader.ReadString()
     let unionCaseTag = reader.ReadInt32()
 
-    let parameterInfo = readParameterInfo tryGetCurrent reader
+    let argType, parameterInfo = readParameterInfo tryGetCurrent reader
     let caseConstructorName = reader.ReadString()
     //let caseCtorInfo = FSharpValue.PreComputeUnionConstructorInfo case.UnionCaseInfo.Value
     //writer.Write(caseCtorInfo.Name)
@@ -270,12 +269,13 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
     let gatherAllSources = reader.ReadBoolean()
 
     // --
-    let uci = lazy(FSharpType.GetUnionCases(Type.GetType(unionCaseType)).[unionCaseTag])
+    let unionType = lazy(Type.GetType(unionCaseType))
+    let uci = lazy(FSharpType.GetUnionCases(unionType.Value).[unionCaseTag])
     let fields = lazy(uci.Value.GetFields())
     let types = lazy(fields.Value |> Array.map (fun f -> f.PropertyType))
 
     let caseCtor = lazy(
-        let meth = uci.Value.DeclaringType.GetMethod(caseConstructorName, System.Reflection.BindingFlags.Static ||| System.Reflection.BindingFlags.Public )
+        let meth = unionType.Value.GetMethod(caseConstructorName, System.Reflection.BindingFlags.Static ||| System.Reflection.BindingFlags.Public )
         (fun args ->
             meth.Invoke(null, args))
     )
@@ -290,6 +290,7 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
         Tag = unionCaseTag
         UnionCaseInfo = uci
         ParameterInfo = parameterInfo
+        ArgumentType = argType
         GetParent = getParent
         CaseCtor = caseCtor
         FieldCtor = fieldCtor

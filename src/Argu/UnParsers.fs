@@ -46,7 +46,7 @@ let mkCommandLineSyntax (argInfo : UnionArgInfo) (prefix : string) (maxWidth : i
     let printedCases =
         argInfo.Cases.Value
         |> Seq.filter (fun aI -> not aI.IsHidden.Value && not aI.IsMainCommand)
-        |> Seq.filter (fun aI -> aI.Type <> ArgumentType.SubCommand)
+        |> Seq.filter (fun aI -> aI.ArgumentType <> ArgumentType.SubCommand)
         |> Seq.sortBy (fun aI -> aI.CliPosition.Value)
 
     match argInfo.HelpParam.Flags with
@@ -238,7 +238,7 @@ let mkUsageString (argInfo : UnionArgInfo) (programName : string) hideSyntax wid
         argInfo.Cases.Value
         |> Seq.filter (fun aI -> not aI.IsHidden.Value)
         |> Seq.filter (fun aI -> not aI.IsMainCommand)
-        |> Seq.partition (fun aI -> aI.Type <> ArgumentType.SubCommand)
+        |> Seq.partition (fun aI -> aI.ArgumentType <> ArgumentType.SubCommand)
 
     match argInfo.MainCommandParam.Value with
     | Some aI when not aI.IsHidden.Value ->

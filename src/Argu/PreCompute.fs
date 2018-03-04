@@ -349,6 +349,13 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
 
             attr.Separators, attr.SplitOptions
 
+    let argType =
+        match types with
+        | [|NestedParseResults _|] -> ArgumentType.SubCommand
+        | [|Optional _|] -> ArgumentType.Optional
+        | [|List _|] -> ArgumentType.List
+        | _ -> ArgumentType.Primitive
+
     let parsers = lazy(
         match types with
         | [|NestedParseResults prt|] ->
@@ -464,6 +471,7 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
         AppSettingsSplitOptions = appSettingsSplitOptions
         Description = description
         ParameterInfo = parsers
+        ArgumentType = argType
         AppSettingsCSV = isAppSettingsCSV
         MainCommandName = mainCommandName
         IsMandatory = isMandatory
@@ -517,7 +525,7 @@ and private preComputeUnionArgInfoInner (stack : Type list) (helpParam : HelpPar
         |> Seq.sortBy (fun a -> a.Tag)
         |> Seq.toArray)
 
-    let containsSubcommands = lazy(caseInfo.Value |> Array.exists (fun c -> c.Type = ArgumentType.SubCommand))
+    let containsSubcommands = lazy(caseInfo.Value |> Array.exists (fun c -> c.ArgumentType = ArgumentType.SubCommand))
     let isRequiredSubcommand = lazy(t.ContainsAttribute<RequireSubcommandAttribute>() && containsSubcommands.Value)
 
     // need to delay this computation since it depends
