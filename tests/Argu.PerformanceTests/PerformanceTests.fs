@@ -28,6 +28,17 @@ let main (args: string[]) =
         instance.GlobalSetup()
         let subCommand = instance.Parse()
         printfn "%A" subCommand
+    if args.Length = 1 && args.[0] = "serialized" then
+#if NETCOREAPP2_0
+#else
+        ProfileOptimization.SetProfileRoot(@"C:\temp\")
+        ProfileOptimization.StartProfile("Profile_Benchmark")
+#endif
+        let instance = SerializedPerfTest()
+        instance.Args <- "add nuget Foo.Bar"
+        instance.GlobalSetup()
+        let subCommand = instance.Parse()
+        printfn "%A" subCommand
     else if args.Length = 1 && args.[0] = "save" then
 #if NETCOREAPP2_0
 #else

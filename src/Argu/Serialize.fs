@@ -99,6 +99,7 @@ and private writeUnionArgInfo (writer: BinaryWriter) (info: UnionArgInfo) =
     writer.Write(info.ContainsSubcommands.Value)
     writer.Write(info.IsRequiredSubcommand.Value)
     writeSeq writer info.InheritedParams.Value writeCase
+    writeOptString writer info.GroupedSwitchRegex.Value
     writeSeq writer info.AppSettingsParamIndex.Value (fun _ pair ->
         writer.Write(pair.Key)
         writeCase writer pair.Value)
@@ -284,7 +285,7 @@ and private readUnionArgInfo (tryGetParent : unit -> UnionCaseArgInfo option) (r
     let isRequiredSubcommand = reader.ReadBoolean()
     // TagReader
     let inheritedParams = lazyConst (readArray reader readCase)
-    // GroupedSwitchExtractor
+    let groupedSwitchRegex = lazyConst (readOptString reader)
     let appSettingsParamIndex = readArray reader (fun _ ->
         let key = reader.ReadString()
         let value = readCase reader
@@ -311,7 +312,8 @@ and private readUnionArgInfo (tryGetParent : unit -> UnionCaseArgInfo option) (r
             IsRequiredSubcommand = lazyConst isRequiredSubcommand
             TagReader = lazy(FSharpValue.PreComputeUnionTagReader(t.Value, allBindings))
             InheritedParams = inheritedParams
-            GroupedSwitchExtractor = Helpers.groupedSwitchExtractor caseInfo inheritedParams helpParam
+            GroupedSwitchRegex = groupedSwitchRegex
+            GroupedSwitchExtractor = Helpers.groupedSwitchExtractor groupedSwitchRegex
             AppSettingsParamIndex =
                 lazy(
                     let dict = Dictionary<_,_>(appSettingsParamIndex.Length)

@@ -208,7 +208,7 @@ let getHierarchy (uai : UnionArgInfo) =
 module Helpers =
     /// recognizes and extracts grouped switches
     /// e.g. -efx --> -e -f -x
-    let groupedSwitchExtractor (caseInfo: Lazy<UnionCaseArgInfo[]>) (inheritedParams: Lazy<UnionCaseArgInfo[]>) (helpParam: HelpParam) =
+    let groupedSwitchRegex (caseInfo: Lazy<UnionCaseArgInfo[]>) (inheritedParams: Lazy<UnionCaseArgInfo[]>) (helpParam: HelpParam) =
         lazy(
             let chars =
                 caseInfo.Value
@@ -221,13 +221,20 @@ module Helpers =
                 |> Seq.toArray
                 |> String
 
-            if chars.Length = 0 then (fun _ -> [||]) else
+            if chars.Length = 0 then None else
 
-            let regex = new Regex("^-[" + chars + "]+$", RegexOptions.Compiled)
+            let regex = "^-[" + chars + "]+$"
+            Some regex)
 
-            fun (arg : string) ->
-                if not <| regex.IsMatch arg then [||]
-                else Array.init (arg.Length - 1) (fun i -> String([|'-'; arg.[i + 1]|])))
+    let groupedSwitchExtractor (regexString: Lazy<string option>) =
+        lazy(
+            match regexString.Value with
+            | None -> (fun _ -> [||])
+            | Some regexString ->
+                let regex = new Regex(regexString, RegexOptions.Compiled)
+                (fun (arg : string) ->
+                    if not <| regex.IsMatch arg then [||]
+                    else Array.init (arg.Length - 1) (fun i -> String([|'-'; arg.[i + 1]|]))))
 
     let caseCtor uci = lazy(FSharpValue.PreComputeUnionConstructor(uci, allBindings))
     let fieldReader uci = lazy(FSharpValue.PreComputeUnionReader(uci, allBindings))
@@ -549,6 +556,8 @@ and private preComputeUnionArgInfoInner (stack : Type list) (helpParam : HelpPar
         | [|mcp|] -> Some mcp
         | _ -> arguExn "template type '%O' has specified the MainCommand attribute in more than one union cases." t)
 
+    let groupedSwitchRegex = Helpers.groupedSwitchRegex caseInfo inheritedParams helpParam
+
     let result = {
         Type = lazy(t)
         Depth = List.length stack
@@ -558,7 +567,8 @@ and private preComputeUnionArgInfoInner (stack : Type list) (helpParam : HelpPar
         HelpParam = helpParam
         ContainsSubcommands = containsSubcommands
         IsRequiredSubcommand = isRequiredSubcommand
-        GroupedSwitchExtractor = Helpers.groupedSwitchExtractor caseInfo inheritedParams helpParam
+        GroupedSwitchRegex = groupedSwitchRegex
+        GroupedSwitchExtractor = Helpers.groupedSwitchExtractor groupedSwitchRegex
         AppSettingsParamIndex = appSettingsIndex
         InheritedParams = inheritedParams
         CliParamIndex = cliIndex

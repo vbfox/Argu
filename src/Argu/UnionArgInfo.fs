@@ -4,6 +4,7 @@ module internal Argu.UnionArgInfo
 open System
 open System.Collections.Generic
 open FSharp.Reflection
+open System.Text.RegularExpressions
 
 type IParseResult =
     abstract GetAllResults : unit -> seq<obj>
@@ -153,6 +154,8 @@ and [<NoEquality; NoComparison>]
         TagReader : Lazy<obj -> int>
         /// Arguments inherited by parent commands
         InheritedParams : Lazy<UnionCaseArgInfo []>
+        /// Single character switches (Regex)
+        GroupedSwitchRegex : Lazy<string option>
         /// Single character switches
         GroupedSwitchExtractor : Lazy<string -> string []>
         /// Union cases indexed by appsettings parameter names
