@@ -204,8 +204,8 @@ type ParseResults<'Template when 'Template :> IArgParserTemplate>
     /// </summary>
     member r.TryGetSubCommand() : 'Template option =
         results.Cases
-        |> Seq.concat
-        |> Seq.tryPick(fun c ->
+        |> Array.concat
+        |> Array.tryPick(fun c ->
             if c.CaseInfo.ArgumentType = ArgumentType.SubCommand then
                 Some(c.Value :?> 'Template)
             else None)
