@@ -65,10 +65,10 @@ let mkPrimitiveParser (name : string) (parser : string -> 'T) (unparser : 'T -> 
         UnParser = fun o -> unparser (o :?> 'T)
     }
 
-let dict (s: ('key * 'value) []) =
+let private dict (s: ('key * 'value) []) =
     let result = System.Collections.Generic.Dictionary<'key, 'value>(s.Length)
-    for (key, value) in s do
-        result.Add(key, value)
+    for pair in s do
+        result.Add(fst pair, snd pair)
     result :> System.Collections.Generic.IDictionary<_,_>
 
 let primitiveParsers = lazy(
@@ -188,11 +188,11 @@ let validateCliParam (name : string) =
 let validSeparatorChars = [|'=' ; ':' ; '.' ; '#' ; '+' ; '^' ; '&' ; '?' ; '%' ; '$' ; '~' ; '@'|]
 let private validSeparatorRegex =
     let escapedChars = new String(validSeparatorChars) |> Regex.Escape
-    new Regex(sprintf @"[%s]+" escapedChars, RegexOptions.Compiled)
+    new Regex(@"[" + escapedChars + "]+" , RegexOptions.Compiled)
 
 let validateSeparator (uci : UnionCaseInfo) (sep : string) =
     if sep = null || not <| validSeparatorRegex.IsMatch sep then
-        let allowedchars = validSeparatorChars |> Seq.map (fun c -> sprintf "'%c'" c) |> String.concat ", "
+        let allowedchars = validSeparatorChars |> Seq.map (fun c -> String([|''';c;'''|])) |> String.concat ", "
         arguExn "parameter '%O' specifies invalid separator '%s' in CustomAssignment attribute.%sAllowed characters: %s"
             uci sep Environment.NewLine allowedchars
 
@@ -217,17 +217,17 @@ module Helpers =
                 |> Seq.append helpParam.Flags
                 |> Seq.filter (fun name -> name.Length = 2 && name.[0] = '-' && Char.IsLetterOrDigit name.[1])
                 |> Seq.map (fun name -> name.[1])
-                |> Seq.distinct
+                |> System.Linq.Enumerable.Distinct
                 |> Seq.toArray
                 |> String
 
             if chars.Length = 0 then (fun _ -> [||]) else
 
-            let regex = new Regex(sprintf "^-[%s]+$" chars, RegexOptions.Compiled)
+            let regex = new Regex("^-[" + chars + "]+$", RegexOptions.Compiled)
 
             fun (arg : string) ->
                 if not <| regex.IsMatch arg then [||]
-                else Array.init (arg.Length - 1) (fun i -> sprintf "-%c" arg.[i + 1]))
+                else Array.init (arg.Length - 1) (fun i -> String([|'-'; arg.[i + 1]|])))
 
     let caseCtor uci = lazy(FSharpValue.PreComputeUnionConstructor(uci, allBindings))
     let fieldReader uci = lazy(FSharpValue.PreComputeUnionReader(uci, allBindings))
@@ -246,7 +246,7 @@ module Helpers =
             match customAssignmentSeparator.Value with
             | None -> arguExn "internal error: attempting to call assign parser on invalid parameter."
             | Some sep ->
-                let pattern = sprintf @"^(.+)%s(.+)$" (Regex.Escape sep)
+                let pattern = @"^(.+)" + (Regex.Escape sep) + "(.+)$"
                 let regex = new Regex(pattern, RegexOptions.RightToLeft ||| RegexOptions.Compiled)
                 fun token ->
                     let m = regex.Match token
