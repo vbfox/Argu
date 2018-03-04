@@ -55,7 +55,7 @@ let main (args: string[]) =
         printfn "%A" subCommand
 
     else
-        let _summary = BenchmarkRunner.Run<PerfTest>()
+        //let _summary = BenchmarkRunner.Run<PerfTest>()
         let _summary = BenchmarkRunner.Run<SerializedPerfTest>()
 
         ()
