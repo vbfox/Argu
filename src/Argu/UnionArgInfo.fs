@@ -59,6 +59,8 @@ type UnionCaseArgInfo =
         Depth : int
         /// Numbers of parameters in the given union case
         Arity : int
+        /// Same as UnionCaseInfo.Tag
+        Tag: int
         /// UCI identifier
         UnionCaseInfo : Lazy<UnionCaseInfo>
         /// Field parser definitions or nested union argument
@@ -114,7 +116,6 @@ type UnionCaseArgInfo =
         GatherAllSources : Lazy<bool>
     }
 with
-    member inline __.Tag = __.UnionCaseInfo.Value.Tag
     member inline __.IsMainCommand = Option.isSome __.MainCommandName.Value
     member inline __.IsCommandLineArg = match __.CommandLineNames.Value with [] -> __.IsMainCommand | _ -> true
     member inline __.Type = __.ParameterInfo.Value.Type

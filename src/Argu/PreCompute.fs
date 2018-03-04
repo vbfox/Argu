@@ -449,6 +449,7 @@ let rec private preComputeUnionCaseArgInfo (stack : Type list) (helpParam : Help
         with _ -> arguExn "Error generating usage string from IArgParserTemplate for case %O." uci)
 
     let uai = {
+        Tag = uci.Tag
         UnionCaseInfo = lazy(uci)
         Arity = fields.Length
         Depth = List.length stack - 1
