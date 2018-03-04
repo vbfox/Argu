@@ -42,7 +42,26 @@ let private writeFieldParserInfo (writer: BinaryWriter) (fieldParserInfo: FieldP
     writer.Write(fieldParserInfo.Type.AssemblyQualifiedName)
     ()
 
+let private beginBlock (writer: BinaryWriter) =
+    let stream = new MemoryStream()
+    let newWriter = new BinaryWriter(stream, Encoding.UTF8)
+    let disposable =
+        { new IDisposable with
+            member __.Dispose() =
+                newWriter.Flush()
+                stream.Position <- 0L
+                writer.Write(stream.Length)
+                writer.Flush()
+                stream.CopyTo(writer.BaseStream)
+                newWriter.Dispose()
+                stream.Dispose() }
+
+    newWriter, disposable
+
 let rec private writeParameterInfo (writer: BinaryWriter) (parameterInfo: ParameterInfo) =
+    let writer, disposable = beginBlock writer
+    use __ = disposable
+
     match parameterInfo with
     | Primitives fieldParserInfos ->
         writer.Write(1uy)
@@ -70,7 +89,17 @@ and private writeCase (writer: BinaryWriter) (case: UnionCaseArgInfo) =
     writeParameterInfo writer case.ParameterInfo.Value
     // GetParent
     // CaseCtor
+    let caseCtorInfo = FSharpValue.PreComputeUnionConstructorInfo case.UnionCaseInfo.Value
+    writer.Write(caseCtorInfo.Name)
     // FieldCtor
+    (*let fieldTypes = case.UnionCaseInfo.Value.GetFields() |> Array.map (fun f -> f.PropertyType)
+    let fieldCtorInfoName =
+        match fieldTypes.Length with
+        | 0 -> None
+        | _ ->
+            let tupleType = FSharpType.MakeTupleType fieldTypes
+            let typeInfo, ctorInfo = FSharpValue.PreComputeTupleConstructorInfo tupleType
+            Some (typeInfo.Name)*)
     // FieldReader
     writeSeq writer case.CommandLineNames.Value writeString
     writeOptString writer case.AppSettingsName.Value
@@ -177,30 +206,37 @@ let private readHelpParam (reader: BinaryReader): HelpParam =
 let inline private lazyConst x =
     Lazy<_>(Func<_>(fun () -> x), false)
 
+let blockAsLazy (reader: BinaryReader) (inner: BinaryReader -> 'a): Lazy<'a> =
+    let blockSize = reader.ReadInt64()
+    let start = reader.BaseStream.Position
+    reader.BaseStream.Seek(blockSize, SeekOrigin.Current) |> ignore
+    lazy(
+        reader.BaseStream.Position <- start
+        inner reader
+    )
+
 let rec private readParameterInfo (tryGetCurrent : unit -> UnionCaseArgInfo option) (reader: BinaryReader): Lazy<ParameterInfo> =
-    let case = reader.ReadByte()
-    match case with
-    | 1uy ->
-        let infos = readArray reader readFieldParserInfo
-        lazy(
+    blockAsLazy reader (fun (reader: BinaryReader) ->
+        let case = reader.ReadByte()
+        match case with
+        | 1uy ->
+            let infos = readArray reader readFieldParserInfo
             let infos = infos |> Array.map (fun l -> l.Value)
-            Primitives infos)
-    | 2uy ->
-        let existential = readExistential reader
-        let label = readOpt reader readString
-        lazy(
-            OptionalParam (existential.Value, getPrimitiveParserByType label existential.Value.Type))
-    | 3uy ->
-        let existential = readExistential reader
-        let label = readOpt reader readString
-        lazy(
-            ListParam (existential.Value, getPrimitiveParserByType label existential.Value.Type))
-    | 4uy ->
-        let shape = readShapeArgumentTemplate reader
-        let argInfo = readUnionArgInfo tryGetCurrent reader
-        let label = readOptString reader
-        lazy(SubCommand (shape.Value, argInfo, label))
-    |_ -> failwith "Not supported"
+            Primitives infos
+        | 2uy ->
+            let existential = readExistential reader
+            let label = readOpt reader readString
+            OptionalParam (existential.Value, getPrimitiveParserByType label existential.Value.Type)
+        | 3uy ->
+            let existential = readExistential reader
+            let label = readOpt reader readString
+            ListParam (existential.Value, getPrimitiveParserByType label existential.Value.Type)
+        | 4uy ->
+            let shape = readShapeArgumentTemplate reader
+            let argInfo = readUnionArgInfo tryGetCurrent reader
+            let label = readOptString reader
+            SubCommand (shape.Value, argInfo, label)
+        |_ -> failwith "Not supported")
 
 and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): UnionCaseArgInfo =
     let current = ref None
@@ -213,6 +249,9 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
     let unionCaseTag = reader.ReadInt32()
 
     let parameterInfo = readParameterInfo tryGetCurrent reader
+    let caseConstructorName = reader.ReadString()
+    //let caseCtorInfo = FSharpValue.PreComputeUnionConstructorInfo case.UnionCaseInfo.Value
+    //writer.Write(caseCtorInfo.Name)
     let commandLineNames = readArray reader readString
     let appSettingsName = readOptString reader
     let description = readString reader
@@ -235,7 +274,11 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
     let fields = lazy(uci.Value.GetFields())
     let types = lazy(fields.Value |> Array.map (fun f -> f.PropertyType))
 
-    let caseCtor = lazy((Helpers.caseCtor uci.Value).Value)
+    let caseCtor = lazy(
+        let meth = uci.Value.DeclaringType.GetMethod(caseConstructorName, System.Reflection.BindingFlags.Static ||| System.Reflection.BindingFlags.Public )
+        (fun args ->
+            meth.Invoke(null, args))
+    )
     let fieldReader = lazy((Helpers.fieldReader uci.Value).Value)
     let fieldCtor = lazy((Helpers.tupleConstructor types.Value).Value)
     let assignParser = Helpers.assignParser customAssignmentSeparator
@@ -244,6 +287,7 @@ and private readCase (getParent: unit -> UnionArgInfo) (reader: BinaryReader): U
         Name = lazyConst name
         Depth = depth
         Arity = arity
+        Tag = unionCaseTag
         UnionCaseInfo = uci
         ParameterInfo = parameterInfo
         GetParent = getParent
@@ -331,7 +375,11 @@ and private readUnionArgInfo (tryGetParent : unit -> UnionCaseArgInfo option) (r
 let private deserialize (data: byte[]): UnionArgInfo =
     use stream = new MemoryStream(data)
     use gzip = new GZipStream(stream, CompressionMode.Decompress)
-    use reader = new BinaryReader(gzip, Encoding.UTF8)
+
+    let finalStream = new MemoryStream(data.Length)
+    gzip.CopyTo(finalStream)
+    finalStream.Position <- 0L
+    let reader = new BinaryReader(finalStream, Encoding.UTF8)
 
     readUnionArgInfo (fun () -> None) reader
 
