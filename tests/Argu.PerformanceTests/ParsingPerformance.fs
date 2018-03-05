@@ -730,8 +730,8 @@ type SerializedPerfTest() =
     member this.GlobalSetup() =
 #if NETCOREAPP2_0
 #else
-        //ProfileOptimization.SetProfileRoot(@"C:\temp\")
-        //ProfileOptimization.StartProfile("Profile_Benchmark")
+        ProfileOptimization.SetProfileRoot(@"C:\temp\")
+        ProfileOptimization.StartProfile("Profile_Benchmark")
 #endif
         args <- this.Args.Split(' ')
     [<Benchmark>]
