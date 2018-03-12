@@ -103,19 +103,19 @@ type ArgumentType =
 type ArgumentCaseInfo =
     {
         /// Human readable name identifier
-        Name : Lazy<string>
+        Name : string
         /// Union case reflection identifier
         UnionCaseInfo : UnionCaseInfo
         /// Type of argument parser
         ArgumentType : ArgumentType
 
         /// head element denotes primary command line arg
-        CommandLineNames : Lazy<string list>
+        CommandLineNames : string list
         /// name used in AppSettings
-        AppSettingsName : Lazy<string option>
+        AppSettingsName : string option
 
         /// Description of the parameter
-        Description : Lazy<string>
+        Description : string
 
         /// AppSettings parameter separator
         AppSettingsSeparators : string list
@@ -123,23 +123,23 @@ type ArgumentCaseInfo =
         AppSettingsSplitOptions : StringSplitOptions
 
         /// Mandated Cli position for the argument
-        CliPosition : Lazy<CliPosition>
+        CliPosition : CliPosition
         /// Specifies that this argument is the main CLI command
         IsMainCommand : bool
         /// If specified, should consume remaining tokens from the CLI
-        IsRest : Lazy<bool>
+        IsRest : bool
         /// Separator token used for EqualsAssignment syntax; e.g. '=' forces '--param=arg' syntax
-        CustomAssignmentSeparator : Lazy<string option>
+        CustomAssignmentSeparator : string option
         /// If specified, multiple parameters can be added in AppSettings in CSV form.
-        AppSettingsCSV : Lazy<bool>
+        AppSettingsCSV : bool
         /// Fails if no argument of this type is specified
-        IsMandatory : Lazy<bool>
+        IsMandatory : bool
         /// Specifies that argument should be specified at most once in CLI
-        IsUnique : Lazy<bool>
+        IsUnique : bool
         /// Hide from Usage
-        IsHidden : Lazy<bool>
+        IsHidden : bool
         /// Declares that the parameter should gather any unrecognized CLI params
-        IsGatherUnrecognized : Lazy<bool>
+        IsGatherUnrecognized : bool
         /// Combine AppSettings with CLI inputs
-        GatherAllSources : Lazy<bool>
+        GatherAllSources : bool
     }

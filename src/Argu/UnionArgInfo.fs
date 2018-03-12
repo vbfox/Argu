@@ -211,22 +211,22 @@ type UnionCaseArgInfo with
 
     member ucai.ToArgumentCaseInfo() : ArgumentCaseInfo =
         {
-            Name = ucai.Name
+            Name = ucai.Name.Value
             ArgumentType = ucai.ArgumentType
             UnionCaseInfo = ucai.UnionCaseInfo.Value
-            CommandLineNames = ucai.CommandLineNames
-            AppSettingsName = ucai.AppSettingsName
-            Description = ucai.Description
+            CommandLineNames = ucai.CommandLineNames.Value
+            AppSettingsName = ucai.AppSettingsName.Value
+            Description = ucai.Description.Value
             AppSettingsSeparators = Array.toList ucai.AppSettingsSeparators
             AppSettingsSplitOptions = ucai.AppSettingsSplitOptions
             IsMainCommand = ucai.IsMainCommand
-            IsRest = ucai.IsRest
-            CliPosition = ucai.CliPosition
-            CustomAssignmentSeparator = ucai.CustomAssignmentSeparator
-            AppSettingsCSV = ucai.AppSettingsCSV
-            IsMandatory = ucai.IsMandatory
-            IsUnique = ucai.IsUnique
-            IsHidden = ucai.IsHidden
-            IsGatherUnrecognized = ucai.IsGatherUnrecognized
-            GatherAllSources = ucai.GatherAllSources
+            IsRest = ucai.IsRest.Value
+            CliPosition = ucai.CliPosition.Value
+            CustomAssignmentSeparator = ucai.CustomAssignmentSeparator.Value
+            AppSettingsCSV = ucai.AppSettingsCSV.Value
+            IsMandatory = ucai.IsMandatory.Value
+            IsUnique = ucai.IsUnique.Value
+            IsHidden = ucai.IsHidden.Value
+            IsGatherUnrecognized = ucai.IsGatherUnrecognized.Value
+            GatherAllSources = ucai.GatherAllSources.Value
         }
